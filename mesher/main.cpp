@@ -88,24 +88,6 @@ void mesh_2d(int *blocks, int width, int height, int count, Range2d *ranges, int
         }
 break1:
 
-        // mark and skip all empty && visited blocks
-/*       for (; start_y < height; start_y++)
-        {
-            for (; start_x < width; start_x++)
-            {
-                if (blocks[start_y * width + start_x] == 0 ||
-                    visited[start_y * width + start_x] == 1)
-                {
-                    visited[start_y * width + start_x] = 1;
-                }
-                else
-                {
-                    goto break2;
-                }
-            }
-        }
-break2:*/
-
         // if a block at start_x, start_y is in the grid (the grid is not empty),
         // mark it as visited
         if (start_x < width && start_y < height)
@@ -219,10 +201,10 @@ void test_2d_meshing(void)
     const int width1  = 4;
     const int height1 = 4;
     int blocks1[width1 * height1] = {
-        1, 0, 0, 1,
-        0, 1, 1, 0,
-        0, 1, 1, 0,
-        1, 0, 0, 1
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+        0, 1, 1, 0
     };
 
     int width   = width1;
