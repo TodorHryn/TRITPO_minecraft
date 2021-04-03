@@ -692,7 +692,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
     {
         memory->is_initialized = 1;
 
-        /* init chunk (0, 0) */ {
+        /* init chunk (0, 0, 0) */ {
             Chunk *c = &state->world.chunks[0];
             c->x = 0;
             c->y = 0;
@@ -712,7 +712,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
             }
         }
 
-        /* init chunk (-1, -1) */ {
+        /* init chunk (-1, 0, -1) */ {
             Chunk *c = &state->world.chunks[1];
             c->x = -1;
             c->y = 0;
@@ -733,7 +733,47 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
             }
         }
 
-        state->world.num_of_chunks = 2;
+        /* init chunk (-1, 0, 0) */ {
+            Chunk *c = &state->world.chunks[2];
+            c->x = -1;
+            c->y = 0;
+            c->z = 0;
+
+            int i = 0;
+            for (int y = 0; y < 2; y++)
+            {
+                for (int z = 0; z < CHUNK_DIM; z++)
+                {
+                    for (int x = 0; x < CHUNK_DIM; x++)
+                    {
+                        c->blocks[CHUNK_DIM * CHUNK_DIM * z + CHUNK_DIM * y + x] = 1;
+                        i++;
+                    }
+                }
+            }
+        }
+
+        /* init chunk (4, -2, -3) */ {
+            Chunk *c = &state->world.chunks[3];
+            c->x = 4;
+            c->y = -2;
+            c->z = -3;
+
+            int i = 0;
+            for (int y = 0; y < 6; y++)
+            {
+                for (int z = 0; z < CHUNK_DIM; z++)
+                {
+                    for (int x = 0; x < CHUNK_DIM; x++)
+                    {
+                        c->blocks[CHUNK_DIM * CHUNK_DIM * z + CHUNK_DIM * y + x] = 1;
+                        i++;
+                    }
+                }
+            }
+        }
+
+        state->world.num_of_chunks = 4;
         // TODO(max): add assert
 
         state->cam_pos = Vec3f(0, 20, 0);
@@ -863,7 +903,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
         move_dir.y = 0.0f;
         state->cam_move_dir = normalize(move_dir);
 
-        float cam_speed = 5.0f * input->dt;
+        float cam_speed = 10.0f * input->dt;
         if (input->w.is_pressed)
         {
             state->cam_pos = state->cam_pos + state->cam_move_dir * cam_speed;
@@ -903,6 +943,40 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 int block_z = rc.k & mask;
 
                 rc.chunk->blocks[CHUNK_DIM * CHUNK_DIM * block_z + CHUNK_DIM * block_y + block_x] = 0;
+            }
+        }
+
+        if (input->mright.is_pressed && !input->mright.was_pressed)
+        {
+            Raycast_result rc = raycast(&state->world, state->cam_pos, state->cam_view_dir);
+            if (rc.collision)
+            {
+                int last_chunk_x = rc.last_i >> CHUNK_DIM_LOG2;
+                int last_chunk_y = rc.last_j >> CHUNK_DIM_LOG2;
+                int last_chunk_z = rc.last_k >> CHUNK_DIM_LOG2;
+
+                Chunk *prev_chunk = 0;
+                for (int chunk_id = 0; chunk_id < state->world.num_of_chunks; chunk_id++)
+                {
+                    Chunk *c = &state->world.chunks[chunk_id];
+                    if ((c->x == last_chunk_x) &&
+                        (c->y == last_chunk_y) &&
+                        (c->z == last_chunk_z))
+                    {
+                        prev_chunk = c;
+                        break;
+                    }
+                }
+
+                if (prev_chunk)
+                {
+                    int mask = ~((~1) << (CHUNK_DIM_LOG2 - 1));
+                    int block_x = rc.last_i & mask;
+                    int block_y = rc.last_j & mask;
+                    int block_z = rc.last_k & mask;
+
+                    prev_chunk->blocks[CHUNK_DIM * CHUNK_DIM * block_z + CHUNK_DIM * block_y + block_x] = 1;
+                }
             }
         }
     }
