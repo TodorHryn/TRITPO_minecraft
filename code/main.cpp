@@ -409,22 +409,64 @@ struct Game_memory
     void *transient_mem;
 };
 
+struct Memory_arena
+{
+    uint8_t *curr;
+    uint8_t *end;
+};
+
+#define ALIGN_UP(n, k) (((n) + (k) - 1) & ((~(k)) + 1))
+#define ALIGN_PTR_UP(n, k) ALIGN_UP((uint64_t)(n), (k))
+void *memory_arena_alloc(Memory_arena *arena, int64_t size)
+{
+    assert(size > 0);
+    assert((uint64_t)arena->curr % 8 == 0);
+
+    if (arena->end < (arena->curr + size))
+    {
+        return (0);
+    }
+
+    uint8_t *result = arena->curr;
+    arena->curr = (uint8_t *)ALIGN_PTR_UP(result + size, 8);
+
+    return (result);
+}
+
 #define CHUNK_DIM_LOG2 4
 #define CHUNK_DIM (1 << 4)
-
 struct Chunk
 {
     int x;
     int y;
     int z;
-    uint8_t blocks[CHUNK_DIM * CHUNK_DIM * CHUNK_DIM];
+    uint8_t *blocks;
+    Chunk *next;
 };
 
 struct World
 {
-    int num_of_chunks;
-    Chunk chunks[4];
+    Memory_arena arena;
+    Chunk *next;
 };
+
+Chunk *world_add_chunk(World *world, int x, int y, int z)
+{
+    Chunk *result = (Chunk *)memory_arena_alloc(&world->arena, sizeof(Chunk) + (CHUNK_DIM * CHUNK_DIM * CHUNK_DIM));
+
+    if (result)
+    {
+        result->x = x;
+        result->y = y;
+        result->z = z;
+        result->blocks = (uint8_t *)&result[1];
+        result->next = world->next;
+
+        world->next = result;
+    }
+
+    return (result);
+}
 
 struct Game_state
 {
@@ -542,9 +584,9 @@ Raycast_result raycast(World *world, Vec3f pos, Vec3f view_dir)
         int chunk_x = i >> CHUNK_DIM_LOG2;
         int chunk_y = j >> CHUNK_DIM_LOG2;
         int chunk_z = k >> CHUNK_DIM_LOG2;
-        for (int idx = 0; idx < world->num_of_chunks; idx++)
+        Chunk *c = world->next;
+        while (c != 0)
         {
-            Chunk *c = &world->chunks[idx];
             if ((chunk_x == c->x) && (chunk_y == c->y) && (chunk_z == c->z))
             {
                 int mask = ~((~1) << (CHUNK_DIM_LOG2 - 1));
@@ -559,6 +601,8 @@ Raycast_result raycast(World *world, Vec3f pos, Vec3f view_dir)
                     goto end_loop;
                 }
             }
+
+            c = c->next;
         }
 
         if (i == i_end && j == j_end && k == k_end)
@@ -692,12 +736,20 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
     {
         memory->is_initialized = 1;
 
-        /* init chunk (0, 0, 0) */ {
-            Chunk *c = &state->world.chunks[0];
-            c->x = 0;
-            c->y = 0;
-            c->z = 0;
+        // NOTE(max): This is how I get memory for world allocator.
+        //            Not the cleanest thing one can imagine but for now it's fine.
+        int max_num_of_chunks = 64;
+        int memory_for_world = max_num_of_chunks * ALIGN_UP(sizeof(Chunk) + (CHUNK_DIM * CHUNK_DIM * CHUNK_DIM), 8);
 
+        state->world.arena.curr = (uint8_t *)ALIGN_PTR_UP(&state[1], 8);
+        state->world.arena.end =
+            state->world.arena.curr + memory_for_world;
+        state->world.next = 0;
+
+        assert(state->world.arena.end < ((uint8_t *)memory->permanent_mem + memory->permanent_mem_size));
+
+       {
+            Chunk *c = world_add_chunk(&state->world, 0, 0, 0);
             int i = 0;
             for (int y = 0; y < 4; y++)
             {
@@ -712,12 +764,8 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
             }
         }
 
-        /* init chunk (-1, 0, -1) */ {
-            Chunk *c = &state->world.chunks[1];
-            c->x = -1;
-            c->y = 0;
-            c->z = -1;
-
+        {
+            Chunk *c = world_add_chunk(&state->world, -1, 0, -1);
             int i = 0;
             for (int y = 0; y < 6; y++)
             {
@@ -733,12 +781,8 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
             }
         }
 
-        /* init chunk (-1, 0, 0) */ {
-            Chunk *c = &state->world.chunks[2];
-            c->x = -1;
-            c->y = 0;
-            c->z = 0;
-
+        {
+            Chunk *c = world_add_chunk(&state->world, -1, 0, 0);
             int i = 0;
             for (int y = 0; y < 2; y++)
             {
@@ -753,12 +797,8 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
             }
         }
 
-        /* init chunk (4, -2, -3) */ {
-            Chunk *c = &state->world.chunks[3];
-            c->x = 4;
-            c->y = -2;
-            c->z = -3;
-
+        {
+            Chunk *c = world_add_chunk(&state->world, 4, -2, -3);
             int i = 0;
             for (int y = 0; y < 6; y++)
             {
@@ -772,9 +812,6 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 }
             }
         }
-
-        state->world.num_of_chunks = 4;
-        // TODO(max): add assert
 
         state->cam_pos = Vec3f(0, 20, 0);
         state->cam_up = Vec3f(0, 1, 0);
@@ -956,9 +993,10 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 int last_chunk_z = rc.last_k >> CHUNK_DIM_LOG2;
 
                 Chunk *prev_chunk = 0;
-                for (int chunk_id = 0; chunk_id < state->world.num_of_chunks; chunk_id++)
+
+                Chunk *c = state->world.next;
+                while (c != 0)
                 {
-                    Chunk *c = &state->world.chunks[chunk_id];
                     if ((c->x == last_chunk_x) &&
                         (c->y == last_chunk_y) &&
                         (c->z == last_chunk_z))
@@ -966,6 +1004,13 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                         prev_chunk = c;
                         break;
                     }
+
+                    c = c->next;
+                }
+
+                if (!prev_chunk)
+                {
+                    prev_chunk = world_add_chunk(&state->world, last_chunk_x, last_chunk_y, last_chunk_z);
                 }
 
                 if (prev_chunk)
@@ -984,7 +1029,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
     /* rendering */
     {
         glEnable(GL_DEPTH_TEST);
-        glClearColor(0, 1, 0, 1);
+        glClearColor(0.75f, 0.96f, 0.9f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(state->shader_program);
@@ -995,15 +1040,15 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
         Mat4x4f view = mat4x4f_lookat(state->cam_pos, state->cam_pos + state->cam_view_dir, state->cam_up);
         glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_view"), 1, GL_FALSE, &view.m[0][0]);
 
-        for (int chunk_id = 0; chunk_id < state->world.num_of_chunks; chunk_id++)
+        Chunk *c = state->world.next;
+        while (c != 0)
         {
             float block_offset = 0.5f;
-            Chunk *c = &state->world.chunks[chunk_id];
             Vec3f chunk_offset(
                 (float)(c->x * CHUNK_DIM) + block_offset,
                 (float)(c->y * CHUNK_DIM) + block_offset,
                 (float)(c->z * CHUNK_DIM) + block_offset);
-            
+
             for (int y = 0; y < CHUNK_DIM; y++)
             {
                 for (int z = 0; z < CHUNK_DIM; z++)
@@ -1026,12 +1071,39 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     }
                 }
             }
+            c = c->next;
         }
+    }
+}
+
+void tests(void)
+{
+    {
+        int k = 8;
+        for (int i = 1; i < 32; i++)
+        {
+            int t = ALIGN_UP(i, k);
+            assert((t % k) == 0);
+        }
+    }
+
+    {
+        static uint8_t bytes[1024];
+        Memory_arena arena = {};
+        arena.curr = bytes;
+        arena.end = bytes + 1024;
+
+        uint8_t *ptr = 0;        
+        ptr = (uint8_t *)memory_arena_alloc(&arena, 13);
+        ptr = (uint8_t *)memory_arena_alloc(&arena, 8);
+        ptr = (uint8_t *)memory_arena_alloc(&arena, 1003);
     }
 }
 
 int main(void)
 {
+    tests();
+
     if (glfwInit() == GLFW_FALSE)
     {
         return (-1);
@@ -1060,7 +1132,7 @@ int main(void)
 
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-#define PERMANENT_MEM_SIZE MEMORY_KB(64)
+#define PERMANENT_MEM_SIZE MEMORY_MB(1)
 #define TRANSIENT_MEM_SIZE MEMORY_GB(1)
 
     static uint8_t permanent_mem_blob[PERMANENT_MEM_SIZE];
