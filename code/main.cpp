@@ -448,13 +448,28 @@ struct Chunk
     int num_of_vs;
     GLuint vao;
     GLuint vbo;
-
 };
 
+#define REBUILD_STACK_SIZE 32
 struct World
 {
     Chunk *next;
+
+    int rebuild_stack_top;
+    Chunk *rebuild_stack[REBUILD_STACK_SIZE];
 };
+
+void world_push_chunk_for_rebuild(World *w, Chunk *c)
+{
+    assert(w->rebuild_stack_top < REBUILD_STACK_SIZE);
+    w->rebuild_stack[w->rebuild_stack_top++] = c;
+}
+
+Chunk *world_pop_chunk_for_rebuild(World *w)
+{
+    assert(w->rebuild_stack_top > 0);
+    return w->rebuild_stack[--w->rebuild_stack_top];
+}
 
 Chunk *world_add_chunk(World *world, Memory_arena *arena, int x, int y, int z)
 {
@@ -486,9 +501,6 @@ struct Game_state
     GLuint vertex_shader;
     GLuint fragment_shader;
     GLuint shader_program;
-
-    GLuint vao;
-    GLuint tex;
 
     Vec3f cam_pos;
     Vec3f cam_view_dir;
@@ -709,7 +721,6 @@ void gen_ranges_3d(uint8_t *blocks, Range3d *ranges, uint8_t *visited, int dim, 
             {
                 for (start_x = 0; start_x < dim; start_x++)
                 {
-                    // TODO(max): think about it
                     if (visited[start_y * dim * dim + start_z * dim + start_x] == 0 &&
                         blocks[start_y * dim * dim + start_z * dim + start_x] != 0)
                     {
@@ -879,8 +890,6 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
         -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
     };
 
-    Chunk *chunk_to_rebuild = 0;
-
     assert(sizeof(Game_state) <= memory->permanent_mem_size);
     Game_state *state = (Game_state *)memory->permanent_mem;
     if (!memory->is_initialized)
@@ -891,11 +900,11 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
         state->arena.end = (uint8_t *)memory->permanent_mem + memory->permanent_mem_size;
 
         state->world.next = 0;
+        state->world.rebuild_stack_top = 0;
 
         {
             Chunk *c = world_add_chunk(&state->world, &state->arena, 0, 0, 0);
-            chunk_to_rebuild = c;
-
+            
             int i = 0;
             for (int y = 0; y < 4; y++)
             {
@@ -909,11 +918,12 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     }
                 }
             }
+            world_push_chunk_for_rebuild(&state->world, c);
         }
 
-#if 0
         {
             Chunk *c = world_add_chunk(&state->world, &state->arena, -1, 0, -1);
+            
             int i = 0;
             for (int y = 0; y < 6; y++)
             {
@@ -921,7 +931,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 {
                     for (int x = 0; x < CHUNK_DIM; x++)
                     {
-                        if (i % 3 == 0)
+                        if (i % 5 == 0)
                         {
                             c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = 1;
                             c->nblocks++;
@@ -930,10 +940,12 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     }
                 }
             }
+            world_push_chunk_for_rebuild(&state->world, c);
         }
 
         {
             Chunk *c = world_add_chunk(&state->world, &state->arena, -1, 0, 0);
+
             int i = 0;
             for (int y = 0; y < 2; y++)
             {
@@ -947,10 +959,12 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     }
                 }
             }
+            world_push_chunk_for_rebuild(&state->world, c);
         }
 
         {
             Chunk *c = world_add_chunk(&state->world, &state->arena, 4, -2, -3);
+
             int i = 0;
             for (int y = 0; y < 6; y++)
             {
@@ -964,8 +978,9 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     }
                 }
             }
+            world_push_chunk_for_rebuild(&state->world, c);
         }
-#endif
+
         state->cam_pos = Vec3f(0, 20, 0);
         state->cam_up = Vec3f(0, 1, 0);
 
@@ -1027,45 +1042,6 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
             OutputDebugString(log_buf);
             assert(0);
         }
-
-#if 0
-        int tex_width = 0;
-        int tex_height = 0;
-        int num_of_channels = 0;
-        uint8_t *texture_data = stbi_load("..\\code\\wall.jpg", &tex_width, &tex_height, &num_of_channels, 0);
-
-        GLuint texture;
-        glGenTextures(1, &texture);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex_width, tex_height, 0, GL_RGB, GL_UNSIGNED_BYTE, texture_data);
-
-        stbi_image_free(texture_data);
-
-        state->tex = texture;
-
-
-        GLuint vao;
-        glGenVertexArrays(1, &vao);
-        glBindVertexArray(vao);
-
-        GLuint vbo;
-        glGenBuffers(1, &vbo);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void *)0);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void *)(sizeof(float) * 3));
-        glEnableVertexAttribArray(1);
-
-        glBindVertexArray(0);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        state->vao = vao;
-#endif
     }
 
     /* logic update */
@@ -1138,7 +1114,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 {
                     rc.chunk->blocks[block_idx] = 0;
                     rc.chunk->nblocks--;
-                    chunk_to_rebuild = rc.chunk;
+                    world_push_chunk_for_rebuild(&state->world, rc.chunk);
                 }
             }
         }
@@ -1186,10 +1162,16 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     {
                         prev_chunk->blocks[block_idx] = 1;
                         prev_chunk->nblocks++;
-                        chunk_to_rebuild = prev_chunk;
+                        world_push_chunk_for_rebuild(&state->world, prev_chunk);
                     }
                 }
             }
+        }
+
+        Chunk *chunk_to_rebuild = 0;
+        if (state->world.rebuild_stack_top > 0)
+        {
+            chunk_to_rebuild = world_pop_chunk_for_rebuild(&state->world);
         }
 
         if (chunk_to_rebuild && chunk_to_rebuild->nblocks)
@@ -1223,6 +1205,8 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                         float dim_x = (float)ranges[i].end_x - base.x + 1.0f;
                         float dim_y = (float)ranges[i].end_y - base.y + 1.0f;
                         float dim_z = (float)ranges[i].end_z - base.z + 1.0f;
+
+                        // TODO(max): check for correct winding order
 
                         // bottom tri 0
                         vs[v_idx + 0 * 3 + 0] = base;
@@ -1307,6 +1291,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
     {
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
+        //glEnable(GL_CULL_FACE);
         glEnable(GL_DEPTH_TEST);
         glClearColor(0.75f, 0.96f, 0.9f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1329,16 +1314,15 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     (float)(c->y * CHUNK_DIM),
                     (float)(c->z * CHUNK_DIM));
 
-                glBindVertexArray(c->vao);
-
                 Mat4x4f model = mat4x4f_identity();
                 model = mat4x4f_translate(model, chunk_offset);
                 glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_model"), 1, GL_FALSE, &model.m[0][0]);
 
                 float gray = 0.7f;
                 glUniform3f(glGetUniformLocation(state->shader_program, "u_color"), gray, gray, gray);
-                glDrawArrays(GL_TRIANGLES, 0, c->num_of_vs);
 
+                glBindVertexArray(c->vao);
+                glDrawArrays(GL_TRIANGLES, 0, c->num_of_vs);
                 glBindVertexArray(0);
             }
             c = c->next;
