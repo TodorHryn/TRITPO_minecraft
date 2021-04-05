@@ -1201,6 +1201,46 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
              
                 int nranges = 0;
                 gen_ranges_3d(chunk_to_rebuild->blocks, ranges, visited, CHUNK_DIM, chunk_to_rebuild->nblocks, &nranges);
+
+                float *tris = (float *)memory_arena_alloc(&arena, 12 * nranges * sizeof(float));
+                if (tris)
+                {
+                    int v_idx = 0;
+                    for (int i = 0; i < nranges; i++)
+                    {
+                        float base_x = (float)ranges[i].start_x;
+                        float base_y = (float)ranges[i].start_y;
+                        float base_z = (float)ranges[i].start_z;
+
+                        float dim_x = base_x - (float)ranges[i].start_x + 1.0f;
+                        float dim_y = base_y - (float)ranges[i].start_y + 1.0f;
+                        float dim_z = base_z - (float)ranges[i].start_z + 1.0f;
+
+                        // tri 0
+                        tris[v_idx + 12 * 0 + 0] = base_x;
+                        tris[v_idx + 12 * 0 + 1] = base_y;
+                        tris[v_idx + 12 * 0 + 2] = base_z;
+
+                        tris[v_idx + 12 * 0 + 3] = base_x + dim_x;
+                        tris[v_idx + 12 * 0 + 4] = base_y;
+                        tris[v_idx + 12 * 0 + 5] = base_z;
+
+                        tris[v_idx + 12 * 0 + 6] = base_x;
+                        tris[v_idx + 12 * 0 + 7] = base_y;
+                        tris[v_idx + 12 * 0 + 8] = base_z + dim_z;
+
+                        // tri 1
+                        tris[v_idx + 12 * 1 + 0] = base_x;
+                        tris[v_idx + 12 * 1 + 1] = base_y;
+                        tris[v_idx + 12 * 1 + 2] = base_z + dim_z;
+
+                        tris[v_idx + 12 * 1 + 0] = base_x + dim_x;
+                        tris[v_idx + 12 * 1 + 1] = base_y;
+                        tris[v_idx + 12 * 1 + 2] = base_z;
+
+                        v_idx += 12;
+                    }
+                }
             }
         }
     }
