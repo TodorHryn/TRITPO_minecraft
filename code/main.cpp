@@ -435,30 +435,32 @@ void *memory_arena_alloc(Memory_arena *arena, int64_t size)
 
 #define CHUNK_DIM_LOG2 4
 #define CHUNK_DIM (1 << 4)
+#define BLOCKS_IN_CHUNK ((CHUNK_DIM) * (CHUNK_DIM) * (CHUNK_DIM))
 struct Chunk
 {
     int x;
     int y;
     int z;
+    int nblocks;
     uint8_t *blocks;
     Chunk *next;
 };
 
 struct World
 {
-    Memory_arena arena;
     Chunk *next;
 };
 
-Chunk *world_add_chunk(World *world, int x, int y, int z)
+Chunk *world_add_chunk(World *world, Memory_arena *arena, int x, int y, int z)
 {
-    Chunk *result = (Chunk *)memory_arena_alloc(&world->arena, sizeof(Chunk) + (CHUNK_DIM * CHUNK_DIM * CHUNK_DIM));
+    Chunk *result = (Chunk *)memory_arena_alloc(arena, sizeof(Chunk) + (CHUNK_DIM * CHUNK_DIM * CHUNK_DIM));
 
     if (result)
     {
         result->x = x;
         result->y = y;
         result->z = z;
+        result->nblocks = 0;
         result->blocks = (uint8_t *)&result[1];
         result->next = world->next;
 
@@ -470,6 +472,8 @@ Chunk *world_add_chunk(World *world, int x, int y, int z)
 
 struct Game_state
 {
+    Memory_arena arena;
+
     GLuint vertex_shader;
     GLuint fragment_shader;
     GLuint shader_program;
@@ -661,6 +665,149 @@ end_loop:
     return (result);
 }
 
+struct Range3d
+{
+    uint8_t type;
+
+    int start_x;
+    int start_y;
+    int start_z;
+
+    int end_x;
+    int end_y;
+    int end_z;
+};
+
+void gen_ranges_3d(uint8_t *blocks, Range3d *ranges, uint8_t *visited, int dim, int count, int *num_of_ranges)
+{
+    //uint8_t *visited = (uint8_t *)calloc(dim * dim * dim, sizeof(uint8_t));
+    int ranges_count = 0;
+
+    while (count > 0)
+    {
+        int start_z = 0;
+        int end_z = 0;
+
+        int start_y = 0;
+        int end_y = 0;
+
+        int start_x = 0;
+        int end_x = 0;
+
+        // skip all visited and empty blocks
+        for (start_y = 0; start_y < dim; start_y++)
+        {
+            for (start_z = 0; start_z < dim; start_z++)
+            {
+                for (start_x = 0; start_x < dim; start_x++)
+                {
+                    // TODO(max): think about it
+                    if (visited[start_y * dim * dim + start_z * dim + start_x] == 0 &&
+                        blocks[start_y * dim * dim + start_z * dim + start_x] != 0)
+                    {
+                        goto break1;
+                    }
+                }
+            }
+        }
+    break1:
+
+        // If a block at (start_x, start_y, start_z) is in the grid (the grid is not empty), mark it as visited.
+        // Also record block type.
+        uint8_t block_type = 0;
+        if (start_x < dim && start_y < dim && start_z < dim)
+        {
+            visited[start_y * dim * dim + start_z * dim + start_x] = 1;
+            block_type = blocks[start_y * dim * dim + start_z * dim + start_x];
+            count--;
+        }
+
+        // try expand in x direction
+        end_x = start_x;
+        while ((end_x + 1 < dim) &&
+            (blocks[start_y * dim * dim + start_z * dim + (end_x + 1)] == block_type) &&
+            (visited[start_y * dim * dim + start_z * dim + (end_x + 1)] == 0))
+        {
+            visited[start_y * dim * dim + start_z * dim + (end_x + 1)] = 1;
+            end_x++;
+            count--;
+        }
+
+        // try expand in z direction
+        end_z = start_z;
+        while (end_z + 1 < dim)
+        {
+            bool can_expand = true;
+            for (int x = start_x; x <= end_x; x++)
+            {
+                if (blocks[start_y * dim * dim + (end_z + 1) * dim + x] != block_type ||
+                    visited[start_y * dim * dim + (end_z + 1) * dim + x] == 1)
+                {
+                    can_expand = false;
+                    break;
+                }
+            }
+
+            if (can_expand)
+            {
+                // mark expanded row of block as visited
+                for (int x = start_x; x <= end_x; x++)
+                {
+                    visited[start_y * dim * dim + (end_z + 1) * dim + x] = 1;
+                }
+                end_z++;
+                count -= end_x - start_x + 1;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        // try expand in y direction
+        end_y = start_y;
+        while (end_y + 1 < dim)
+        {
+            bool can_expand = true;
+            for (int z = start_z; z <= end_z; z++)
+            {
+                for (int x = start_x; x <= end_x; x++)
+                {
+                    if (blocks[(end_y + 1) * dim * dim + z * dim + x] != block_type ||
+                        visited[(end_y + 1) * dim * dim + z * dim + x] == 1)
+                    {
+                        can_expand = false;
+                        goto break2;
+                    }
+                }
+            }
+        break2:
+            if (can_expand)
+            {
+                for (int z = start_z; z <= end_z; z++)
+                {
+                    for (int x = start_x; x <= end_x; x++)
+                    {
+                        visited[(end_y + 1) * dim * dim + z * dim + x] = 1;
+                    }
+                }
+                end_y++;
+                count -= (end_x - start_x + 1) * (end_z - start_z + 1);
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        ranges[ranges_count++] = { block_type, start_x, start_y, start_z, end_x, end_y, end_z };
+    }
+
+    assert(count == 0);
+    //free(visited);
+    *num_of_ranges = ranges_count;
+}
+
 const char *vertex_shader_src = 
     "#version 330 core\n"
     "layout (location = 0) in vec3 aVertexPos;\n"
@@ -736,20 +883,13 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
     {
         memory->is_initialized = 1;
 
-        // NOTE(max): This is how I get memory for world allocator.
-        //            Not the cleanest thing one can imagine but for now it's fine.
-        int max_num_of_chunks = 64;
-        int memory_for_world = max_num_of_chunks * ALIGN_UP(sizeof(Chunk) + (CHUNK_DIM * CHUNK_DIM * CHUNK_DIM), 8);
+        state->arena.curr = (uint8_t *)ALIGN_PTR_UP(&state[1], 8);
+        state->arena.end = (uint8_t *)memory->permanent_mem + memory->permanent_mem_size;
 
-        state->world.arena.curr = (uint8_t *)ALIGN_PTR_UP(&state[1], 8);
-        state->world.arena.end =
-            state->world.arena.curr + memory_for_world;
         state->world.next = 0;
 
-        assert(state->world.arena.end < ((uint8_t *)memory->permanent_mem + memory->permanent_mem_size));
-
-       {
-            Chunk *c = world_add_chunk(&state->world, 0, 0, 0);
+        {
+            Chunk *c = world_add_chunk(&state->world, &state->arena, 0, 0, 0);
             int i = 0;
             for (int y = 0; y < 4; y++)
             {
@@ -758,6 +898,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     for (int x = 0; x < CHUNK_DIM; x++)
                     {
                         c->blocks[CHUNK_DIM * CHUNK_DIM * z + CHUNK_DIM * y + x] = 1;
+                        c->nblocks++;
                         i++;
                     }
                 }
@@ -765,7 +906,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
         }
 
         {
-            Chunk *c = world_add_chunk(&state->world, -1, 0, -1);
+            Chunk *c = world_add_chunk(&state->world, &state->arena, -1, 0, -1);
             int i = 0;
             for (int y = 0; y < 6; y++)
             {
@@ -774,7 +915,10 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     for (int x = 0; x < CHUNK_DIM; x++)
                     {
                         if (i % 3 == 0)
+                        {
                             c->blocks[CHUNK_DIM * CHUNK_DIM * z + CHUNK_DIM * y + x] = 1;
+                            c->nblocks++;
+                        }
                         i++;
                     }
                 }
@@ -782,7 +926,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
         }
 
         {
-            Chunk *c = world_add_chunk(&state->world, -1, 0, 0);
+            Chunk *c = world_add_chunk(&state->world, &state->arena, -1, 0, 0);
             int i = 0;
             for (int y = 0; y < 2; y++)
             {
@@ -791,6 +935,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     for (int x = 0; x < CHUNK_DIM; x++)
                     {
                         c->blocks[CHUNK_DIM * CHUNK_DIM * z + CHUNK_DIM * y + x] = 1;
+                        c->nblocks++;
                         i++;
                     }
                 }
@@ -798,7 +943,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
         }
 
         {
-            Chunk *c = world_add_chunk(&state->world, 4, -2, -3);
+            Chunk *c = world_add_chunk(&state->world, &state->arena, 4, -2, -3);
             int i = 0;
             for (int y = 0; y < 6; y++)
             {
@@ -807,6 +952,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     for (int x = 0; x < CHUNK_DIM; x++)
                     {
                         c->blocks[CHUNK_DIM * CHUNK_DIM * z + CHUNK_DIM * y + x] = 1;
+                        c->nblocks++;
                         i++;
                     }
                 }
@@ -969,6 +1115,9 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
             state->cam_pos = state->cam_pos + Vec3f(0, -cam_speed, 0);
         }
 
+        Chunk *chunk_to_rebuild = 0;
+
+        // block removal
         if (input->mleft.is_pressed)
         {
             Raycast_result rc = raycast(&state->world, state->cam_pos, state->cam_view_dir);
@@ -979,10 +1128,17 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 int block_y = rc.j & mask;
                 int block_z = rc.k & mask;
 
-                rc.chunk->blocks[CHUNK_DIM * CHUNK_DIM * block_z + CHUNK_DIM * block_y + block_x] = 0;
+                int block_idx = CHUNK_DIM * CHUNK_DIM * block_z + CHUNK_DIM * block_y + block_x;
+                if (rc.chunk->blocks[block_idx] != 0)
+                {
+                    rc.chunk->blocks[block_idx] = 0;
+                    rc.chunk->nblocks--;
+                    chunk_to_rebuild = rc.chunk;
+                }
             }
         }
 
+        // block placement
         if (input->mright.is_pressed && !input->mright.was_pressed)
         {
             Raycast_result rc = raycast(&state->world, state->cam_pos, state->cam_view_dir);
@@ -1010,7 +1166,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 
                 if (!prev_chunk)
                 {
-                    prev_chunk = world_add_chunk(&state->world, last_chunk_x, last_chunk_y, last_chunk_z);
+                    prev_chunk = world_add_chunk(&state->world, &state->arena, last_chunk_x, last_chunk_y, last_chunk_z);
                 }
 
                 if (prev_chunk)
@@ -1020,14 +1176,39 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     int block_y = rc.last_j & mask;
                     int block_z = rc.last_k & mask;
 
-                    prev_chunk->blocks[CHUNK_DIM * CHUNK_DIM * block_z + CHUNK_DIM * block_y + block_x] = 1;
+                    int block_idx = CHUNK_DIM * CHUNK_DIM * block_z + CHUNK_DIM * block_y + block_x;
+                    if (prev_chunk->blocks[block_idx] == 0)
+                    {
+                        prev_chunk->blocks[block_idx] = 1;
+                        prev_chunk->nblocks++;
+                        chunk_to_rebuild = prev_chunk;
+                    }
                 }
+            }
+        }
+
+        if (chunk_to_rebuild)
+        {
+            Memory_arena arena = {};
+            arena.curr = (uint8_t *)memory->transient_mem;
+            arena.end  = (uint8_t *)memory->transient_mem + memory->transient_mem_size;
+        
+            Range3d *ranges  = (Range3d *)memory_arena_alloc(&arena, BLOCKS_IN_CHUNK * sizeof(Range3d));
+            uint8_t *visited = (uint8_t *)memory_arena_alloc(&arena, BLOCKS_IN_CHUNK * sizeof(uint8_t));
+            if (ranges && visited)
+            {
+                for (int i = 0; i < (BLOCKS_IN_CHUNK); i++) visited[i] = 0;
+             
+                int nranges = 0;
+                gen_ranges_3d(chunk_to_rebuild->blocks, ranges, visited, CHUNK_DIM, chunk_to_rebuild->nblocks, &nranges);
             }
         }
     }
     
     /* rendering */
     {
+        //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
         glEnable(GL_DEPTH_TEST);
         glClearColor(0.75f, 0.96f, 0.9f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
