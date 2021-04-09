@@ -829,19 +829,31 @@ void gen_ranges_3d(uint8_t *blocks, Range3d *ranges, uint8_t *visited, int dim, 
 const char *vertex_shader_src = 
     "#version 330 core\n"
     "layout (location = 0) in vec3 aVertexPos;\n"
+    "layout (location = 1) in vec3 aVertexNormal;\n"
     "uniform mat4 u_projection;\n"
     "uniform mat4 u_view;\n"
     "uniform mat4 u_model;\n"
+    "out vec3 normal;\n"
+    "out vec3 world_pos;\n"
     "void main() {\n"
     "   gl_Position = u_projection * u_view * u_model * vec4(aVertexPos, 1.0f);\n"
+    "   normal = aVertexNormal;\n"
+    "   world_pos = (u_model * vec4(aVertexPos, 1.0f)).xyz;\n"
     "}\n\0";
 
 const char *fragment_shader_src =
     "#version 330 core\n"
     "uniform vec3 u_color;\n"
+    "in vec3 normal;\n"
+    "in vec3 world_pos;\n"
     "out vec4 frag_color;\n"
     "void main() {\n"
-    "    frag_color = vec4(u_color, 1.0f);\n"
+    "    vec3 light_pos = vec3(60.0f, 60.0f, 0.0f);\n"
+    "    vec3 light_col = vec3(1, 1, 1);\n"
+    "    float ambient_factor = 0.2f;\n"
+    "    vec3 ambient_col = ambient_factor * light_col;\n"
+    "    vec3 diffuse_col = light_col * max(0, dot(normal, normalize(light_pos - world_pos)));\n"
+    "    frag_color = vec4(u_color * (ambient_col + diffuse_col), 1.0f);\n"
     "}\n\0";
 
 void game_update_and_render(Game_input *input, Game_memory *memory)
@@ -1193,7 +1205,9 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 gen_ranges_3d(chunk_to_rebuild->blocks, ranges, visited, CHUNK_DIM, chunk_to_rebuild->nblocks, &nranges);
 
                 int vs_arr_size = 3 * 12 * nranges * sizeof(Vec3f);
-                Vec3f *vs = (Vec3f *)memory_arena_alloc(&arena, vs_arr_size);
+                int ns_arr_size = 3 * 12 * nranges * sizeof(Vec3f);
+                Vec3f *vs = (Vec3f *)memory_arena_alloc(&arena, vs_arr_size + ns_arr_size);
+                Vec3f *ns = vs + (3 * 12 * nranges);
                 if (vs)
                 {
                     int v_idx = 0;
@@ -1208,69 +1222,122 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 
                         // TODO(max): check for correct winding order
 
-#define VIDX(tri_idx, v_idx) (v_idx + (tri_idx) * 3 + (v_idx))
+                        Vec3f bottom_n(0, -1, 0);
+                        Vec3f top_n(0, 1, 0);
+                        Vec3f north_n(0, 0, -1);
+                        Vec3f south_n(0, 0, 1);
+                        Vec3f west_n(-1, 0, 0);
+                        Vec3f east_n(1, 0, 0);
+
                         // bottom tri 0
                         vs[v_idx + 0 * 3 + 0] = base;
                         vs[v_idx + 0 * 3 + 1] = base + Vec3f(dim_x, 0, 0);
                         vs[v_idx + 0 * 3 + 2] = base + Vec3f(0, 0, dim_z);
+
+                        ns[v_idx + 0 * 3 + 0] = bottom_n;
+                        ns[v_idx + 0 * 3 + 1] = bottom_n;
+                        ns[v_idx + 0 * 3 + 2] = bottom_n;
 
                         // bottom tri 1
                         vs[v_idx + 1 * 3 + 0] = base + Vec3f(0, 0, dim_z);
                         vs[v_idx + 1 * 3 + 1] = base + Vec3f(dim_x, 0, 0);
                         vs[v_idx + 1 * 3 + 2] = base + Vec3f(dim_x, 0, dim_z);
 
+                        ns[v_idx + 1 * 3 + 0] = bottom_n;
+                        ns[v_idx + 1 * 3 + 1] = bottom_n;
+                        ns[v_idx + 1 * 3 + 2] = bottom_n;
+
                         // top tri 0
                         vs[v_idx + 2 * 3 + 0] = base + Vec3f(0, dim_y, 0);
                         vs[v_idx + 2 * 3 + 1] = base + Vec3f(0, dim_y, dim_z);
                         vs[v_idx + 2 * 3 + 2] = base + Vec3f(dim_x, dim_y, 0);
+
+                        ns[v_idx + 2 * 3 + 0] = top_n;
+                        ns[v_idx + 2 * 3 + 1] = top_n;
+                        ns[v_idx + 2 * 3 + 2] = top_n;
 
                         // top tri 1
                         vs[v_idx + 3 * 3 + 0] = base + Vec3f(0, dim_y, dim_z);
                         vs[v_idx + 3 * 3 + 1] = base + Vec3f(dim_x, dim_y, dim_z);
                         vs[v_idx + 3 * 3 + 2] = base + Vec3f(dim_x, dim_y, 0);
 
+                        ns[v_idx + 3 * 3 + 0] = top_n;
+                        ns[v_idx + 3 * 3 + 1] = top_n;
+                        ns[v_idx + 3 * 3 + 2] = top_n;
+
                         // north tri 0
                         vs[v_idx + 4 * 3 + 0] = base;
                         vs[v_idx + 4 * 3 + 1] = base + Vec3f(0, dim_y, 0);
                         vs[v_idx + 4 * 3 + 2] = base + Vec3f(dim_x, dim_y, 0);
+
+                        ns[v_idx + 4 * 3 + 0] = north_n;
+                        ns[v_idx + 4 * 3 + 1] = north_n;
+                        ns[v_idx + 4 * 3 + 2] = north_n;
 
                         // north tri 1
                         vs[v_idx + 5 * 3 + 0] = base;
                         vs[v_idx + 5 * 3 + 1] = base + Vec3f(dim_x, dim_y, 0);
                         vs[v_idx + 5 * 3 + 2] = base + Vec3f(dim_x, 0, 0);
 
+                        ns[v_idx + 5 * 3 + 0] = north_n;
+                        ns[v_idx + 5 * 3 + 1] = north_n;
+                        ns[v_idx + 5 * 3 + 2] = north_n;
+
                         // south tri 0
                         vs[v_idx + 6 * 3 + 0] = base + Vec3f(0, 0, dim_z);
                         vs[v_idx + 6 * 3 + 1] = base + Vec3f(dim_x, dim_y, dim_z);
                         vs[v_idx + 6 * 3 + 2] = base + Vec3f(0, dim_y, dim_z);
+
+                        ns[v_idx + 6 * 3 + 0] = south_n;
+                        ns[v_idx + 6 * 3 + 1] = south_n;
+                        ns[v_idx + 6 * 3 + 2] = south_n;
 
                         // south tri 1
                         vs[v_idx + 7 * 3 + 0] = base + Vec3f(0, 0, dim_z);
                         vs[v_idx + 7 * 3 + 1] = base + Vec3f(dim_x, 0, dim_z);
                         vs[v_idx + 7 * 3 + 2] = base + Vec3f(dim_x, dim_y, dim_z);
 
+                        ns[v_idx + 7 * 3 + 0] = south_n;
+                        ns[v_idx + 7 * 3 + 1] = south_n;
+                        ns[v_idx + 7 * 3 + 2] = south_n;
+
                         // west tri 0
                         vs[v_idx + 8 * 3 + 0] = base;
                         vs[v_idx + 8 * 3 + 1] = base + Vec3f(0, dim_y, dim_z);
                         vs[v_idx + 8 * 3 + 2] = base + Vec3f(0, dim_y, 0);
+
+                        ns[v_idx + 8 * 3 + 0] = west_n;
+                        ns[v_idx + 8 * 3 + 1] = west_n;
+                        ns[v_idx + 8 * 3 + 2] = west_n;
 
                         // west tri 1
                         vs[v_idx + 9 * 3 + 0] = base;
                         vs[v_idx + 9 * 3 + 1] = base + Vec3f(0, 0, dim_z);
                         vs[v_idx + 9 * 3 + 2] = base + Vec3f(0, dim_y, dim_z);
 
+                        ns[v_idx + 9 * 3 + 0] = west_n;
+                        ns[v_idx + 9 * 3 + 1] = west_n;
+                        ns[v_idx + 9 * 3 + 2] = west_n;
+
                         // east tri 0
                         vs[v_idx + 10 * 3 + 0] = base + Vec3f(dim_x, 0, 0);
                         vs[v_idx + 10 * 3 + 1] = base + Vec3f(dim_x, dim_y, 0);
                         vs[v_idx + 10 * 3 + 2] = base + Vec3f(dim_x, dim_y, dim_z);
+
+                        ns[v_idx + 10 * 3 + 0] = east_n;
+                        ns[v_idx + 10 * 3 + 1] = east_n;
+                        ns[v_idx + 10 * 3 + 2] = east_n;
 
                         // east tri 1
                         vs[v_idx + 11 * 3 + 0] = base + Vec3f(dim_x, 0, 0);
                         vs[v_idx + 11 * 3 + 1] = base + Vec3f(dim_x, dim_y, dim_z);
                         vs[v_idx + 11 * 3 + 2] = base + Vec3f(dim_x, 0, dim_z);
 
+                        ns[v_idx + 11 * 3 + 0] = east_n;
+                        ns[v_idx + 11 * 3 + 1] = east_n;
+                        ns[v_idx + 11 * 3 + 2] = east_n;
+
                         v_idx += (3 * 12);
-#undef VIDX
                     }
 
                     assert(v_idx == chunk_to_rebuild->num_of_vs);
@@ -1278,9 +1345,11 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     glBindVertexArray(chunk_to_rebuild->vao);
                     glBindBuffer(GL_ARRAY_BUFFER, chunk_to_rebuild->vbo);
 
-                    glBufferData(GL_ARRAY_BUFFER, vs_arr_size, vs, GL_STATIC_DRAW);
+                    glBufferData(GL_ARRAY_BUFFER, vs_arr_size + ns_arr_size, vs, GL_STREAM_DRAW);
                     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, (void *)0);
                     glEnableVertexAttribArray(0);
+                    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, (char *)(0) + vs_arr_size);
+                    glEnableVertexAttribArray(1);
 
                     glBindVertexArray(0);
                     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -1293,7 +1362,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
     {
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
 
         glEnable(GL_DEPTH_TEST);
@@ -1322,7 +1391,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 model = mat4x4f_translate(model, chunk_offset);
                 glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_model"), 1, GL_FALSE, &model.m[0][0]);
 
-                float gray = 0.7f;
+                float gray = 0.6f;
                 glUniform3f(glGetUniformLocation(state->shader_program, "u_color"), gray, gray, gray);
 
                 glBindVertexArray(c->vao);
