@@ -1208,6 +1208,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 
                         // TODO(max): check for correct winding order
 
+#define VIDX(tri_idx, v_idx) (v_idx + (tri_idx) * 3 + (v_idx))
                         // bottom tri 0
                         vs[v_idx + 0 * 3 + 0] = base;
                         vs[v_idx + 0 * 3 + 1] = base + Vec3f(dim_x, 0, 0);
@@ -1219,7 +1220,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                         vs[v_idx + 1 * 3 + 2] = base + Vec3f(dim_x, 0, dim_z);
 
                         // top tri 0
-                        vs[v_idx + 2 * 3 + 0] = base;
+                        vs[v_idx + 2 * 3 + 0] = base + Vec3f(0, dim_y, 0);
                         vs[v_idx + 2 * 3 + 1] = base + Vec3f(0, dim_y, dim_z);
                         vs[v_idx + 2 * 3 + 2] = base + Vec3f(dim_x, dim_y, 0);
 
@@ -1269,6 +1270,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                         vs[v_idx + 11 * 3 + 2] = base + Vec3f(dim_x, 0, dim_z);
 
                         v_idx += (3 * 12);
+#undef VIDX
                     }
 
                     assert(v_idx == chunk_to_rebuild->num_of_vs);
@@ -1289,9 +1291,11 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
     
     /* rendering */
     {
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-        //glEnable(GL_CULL_FACE);
+
         glEnable(GL_DEPTH_TEST);
         glClearColor(0.75f, 0.96f, 0.9f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1322,7 +1326,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 glUniform3f(glGetUniformLocation(state->shader_program, "u_color"), gray, gray, gray);
 
                 glBindVertexArray(c->vao);
-                glDrawArrays(GL_TRIANGLES, 0, c->num_of_vs);
+                glDrawArrays(GL_TRIANGLES, 0, c->num_of_vs);                
                 glBindVertexArray(0);
             }
             c = c->next;
