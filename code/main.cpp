@@ -433,9 +433,104 @@ void *memory_arena_alloc(Memory_arena *arena, int64_t size)
     return (result);
 }
 
+/*
+
+struct Material 
+{
+    Vec3f color;
+} g_materials[2] = {
+    Vec3f(0, 1, 0), // MATERIAL_GRASS
+    Vec3f(1, 0, 0)  // MATERIAL_DIRT
+};
+
+*/
+
+/*
+    struct Chunk
+    {
+        int x;
+        int y;
+        int z;
+        Chunk *next;
+        int nblocks;
+        uint8_t *blocks;
+        Mesh meshes[MATERIAL_LAST];
+    };
+    
+    {
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
+        //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+
+        glEnable(GL_DEPTH_TEST);
+        glClearColor(0.75f, 0.96f, 0.9f, 1);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glUseProgram(state->shader_program);
+
+        Mat4x4f projection = mat4x4f_perspective(90.0f, input->aspect_ratio, 0.1f, 100.0f);
+        glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_projection"), 1, GL_FALSE, &projection.m[0][0]);
+
+        Mat4x4f view = mat4x4f_lookat(state->cam_pos, state->cam_pos + state->cam_view_dir, state->cam_up);
+        glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_view"), 1, GL_FALSE, &view.m[0][0]);
+
+        Chunk *c = state->world.next;
+        while (c != 0)
+        {
+            if (c->nblocks)
+            {
+                Vec3f chunk_offset(
+                    (float)(c->x * CHUNK_DIM),
+                    (float)(c->y * CHUNK_DIM),
+                    (float)(c->z * CHUNK_DIM));
+
+                Mat4x4f model = mat4x4f_identity();
+                model = mat4x4f_translate(model, chunk_offset);
+                glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_model"), 1, GL_FALSE, &model.m[0][0]);
+                
+                for (int m_idx = 0; m_idx < MATERIAL_LAST; m_idx++)
+                {
+                    Mesh *mesh = &c->meshes[m_idx];
+                    if (mesh->num_of_vs)
+                    {
+                        Material mat = g_materials[m_idx];
+                        glUniform3f(glGetUniformLocation(state->shader_program, "u_color"), mat.color.r, mat.color.g, mat.color.b);
+                        glBindVertexArray(m->vao);
+                        glDrawArrays(GL_TRIANGLES, 0, m->num_of_vs);
+                        glBindVertexArray(0);
+                    }
+                }
+            }
+            c = c->next;
+        }
+    }
+*/
+
+enum Block_type
+{
+    BLOCK_GRASS,
+    BLOCK_DIRT,
+    BLOCK_STONE,
+    BLOCK_SNOW,
+    BLOCK_AIR,
+   
+    BLOCK_TYPE_COUNT = BLOCK_AIR,
+};
+static_assert(BLOCK_TYPE_COUNT < 255, "Block_type has more than 255 block types, this won't fit in uint8_t");
+
+struct Mesh
+{
+    int num_of_vs;
+    GLuint vao;
+    GLuint vbo;
+};
+
 #define CHUNK_DIM_LOG2 4
 #define CHUNK_DIM (1 << 4)
 #define BLOCKS_IN_CHUNK ((CHUNK_DIM) * (CHUNK_DIM) * (CHUNK_DIM))
+
+#if 0
 struct Chunk
 {
     int x;
@@ -449,6 +544,18 @@ struct Chunk
     GLuint vao;
     GLuint vbo;
 };
+#else
+struct Chunk
+{
+    int x;
+    int y;
+    int z;
+    Chunk *next;
+    int nblocks;
+    uint8_t *blocks;
+    Mesh meshes[BLOCK_TYPE_COUNT];
+};
+#endif
 
 #define REBUILD_STACK_SIZE 32
 struct World
@@ -480,13 +587,25 @@ Chunk *world_add_chunk(World *world, Memory_arena *arena, int x, int y, int z)
         result->x = x;
         result->y = y;
         result->z = z;
+        result->next = world->next;
         result->nblocks = 0;
         result->blocks = (uint8_t *)&result[1];
-        result->next = world->next;
 
-        result->num_of_vs = 0;
-        glGenVertexArrays(1, &result->vao);
-        glGenBuffers(1, &result->vbo);
+        for (int i = 0; i < BLOCKS_IN_CHUNK; i++)
+        {
+            result->blocks[i] = BLOCK_AIR;
+        }
+
+        for (int i = 0; i < BLOCK_TYPE_COUNT; i++)
+        {
+            result->meshes[i].num_of_vs = 0;
+            result->meshes[i].vao = 0;
+            result->meshes[i].vbo = 0;
+            
+            // TODO(max): Should I create buffers on chunk creation or on demund?
+            //glGenVertexArrays(1, &result->vao);
+            //glGenBuffers(1, &result->vbo);
+        }
 
         world->next = result;
     }
@@ -619,7 +738,7 @@ Raycast_result raycast(World *world, Vec3f pos, Vec3f view_dir)
                 int block_y = j & mask;
                 int block_z = k & mask;
 
-                if (c->blocks[CHUNK_DIM * CHUNK_DIM * block_y + CHUNK_DIM * block_z + block_x])
+                if (c->blocks[CHUNK_DIM * CHUNK_DIM * block_y + CHUNK_DIM * block_z + block_x] != BLOCK_AIR)
                 {
                     chunk = c;
                     collision = true;
@@ -722,7 +841,7 @@ void gen_ranges_3d(uint8_t *blocks, Range3d *ranges, uint8_t *visited, int dim, 
                 for (start_x = 0; start_x < dim; start_x++)
                 {
                     if (visited[start_y * dim * dim + start_z * dim + start_x] == 0 &&
-                        blocks[start_y * dim * dim + start_z * dim + start_x] != 0)
+                        blocks[start_y * dim * dim + start_z * dim + start_x] != BLOCK_AIR)
                     {
                         goto break1;
                     }
@@ -733,7 +852,7 @@ void gen_ranges_3d(uint8_t *blocks, Range3d *ranges, uint8_t *visited, int dim, 
 
         // If a block at (start_x, start_y, start_z) is in the grid (the grid is not empty), mark it as visited.
         // Also record block type.
-        uint8_t block_type = 0;
+        uint8_t block_type = BLOCK_AIR;
         if (start_x < dim && start_y < dim && start_z < dim)
         {
             visited[start_y * dim * dim + start_z * dim + start_x] = 1;
@@ -819,6 +938,7 @@ void gen_ranges_3d(uint8_t *blocks, Range3d *ranges, uint8_t *visited, int dim, 
             }
         }
 
+        assert(block_type != BLOCK_AIR);
         ranges[ranges_count++] = { block_type, start_x, start_y, start_z, end_x, end_y, end_z };
     }
 
@@ -850,7 +970,7 @@ const char *fragment_shader_src =
     "void main() {\n"
     "    vec3 light_pos = vec3(60.0f, 60.0f, 0.0f);\n"
     "    vec3 light_col = vec3(1, 1, 1);\n"
-    "    float ambient_factor = 0.2f;\n"
+    "    float ambient_factor = 0.5f;\n"
     "    vec3 ambient_col = ambient_factor * light_col;\n"
     "    vec3 diffuse_col = light_col * max(0, dot(normal, normalize(light_pos - world_pos)));\n"
     "    frag_color = vec4(u_color * (ambient_col + diffuse_col), 1.0f);\n"
@@ -924,7 +1044,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 {
                     for (int x = 0; x < CHUNK_DIM; x++)
                     {
-                        c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = 1;
+                        c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = BLOCK_DIRT;
                         c->nblocks++;
                         i++;
                     }
@@ -945,7 +1065,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     {
                         if (i % 5 == 0)
                         {
-                            c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = 1;
+                            c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = BLOCK_DIRT;
                             c->nblocks++;
                         }
                         i++;
@@ -965,7 +1085,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 {
                     for (int x = 0; x < CHUNK_DIM; x++)
                     {
-                        c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = 1;
+                        c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = BLOCK_DIRT;
                         c->nblocks++;
                         i++;
                     }
@@ -978,13 +1098,23 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
             Chunk *c = world_add_chunk(&state->world, &state->arena, 4, -2, -3);
 
             int i = 0;
-            for (int y = 0; y < 6; y++)
+            for (int y = 0; y < 8; y++)
             {
                 for (int z = 0; z < CHUNK_DIM; z++)
                 {
                     for (int x = 0; x < CHUNK_DIM; x++)
                     {
-                        c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = 1;
+                        uint8_t block_type;
+                        if (y < 2)
+                            block_type = BLOCK_STONE;
+                        else if (y < 4)
+                            block_type = BLOCK_DIRT;
+                        else if (y < 6)
+                            block_type = BLOCK_GRASS;
+                        else
+                            block_type = BLOCK_STONE;
+
+                        c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = block_type;
                         c->nblocks++;
                         i++;
                     }
@@ -1122,9 +1252,9 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 int block_z = rc.k & mask;
 
                 int block_idx = CHUNK_DIM * CHUNK_DIM * block_y + CHUNK_DIM * block_z + block_x;
-                if (rc.chunk->blocks[block_idx] != 0)
+                if (rc.chunk->blocks[block_idx] != BLOCK_AIR)
                 {
-                    rc.chunk->blocks[block_idx] = 0;
+                    rc.chunk->blocks[block_idx] = BLOCK_AIR;
                     rc.chunk->nblocks--;
                     world_push_chunk_for_rebuild(&state->world, rc.chunk);
                 }
@@ -1170,9 +1300,10 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     int block_z = rc.last_k & mask;
 
                     int block_idx = CHUNK_DIM * CHUNK_DIM * block_y + CHUNK_DIM * block_z + block_x;
-                    if (prev_chunk->blocks[block_idx] == 0)
+                    if (prev_chunk->blocks[block_idx] == BLOCK_AIR)
                     {
-                        prev_chunk->blocks[block_idx] = 1;
+                        // TODO(max): assing block type number
+                        prev_chunk->blocks[block_idx] = BLOCK_DIRT;
                         prev_chunk->nblocks++;
                         world_push_chunk_for_rebuild(&state->world, prev_chunk);
                     }
@@ -1204,6 +1335,206 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 int nranges = 0;
                 gen_ranges_3d(chunk_to_rebuild->blocks, ranges, visited, CHUNK_DIM, chunk_to_rebuild->nblocks, &nranges);
 
+                // NOTE(max): sort ranges by block type
+                for (int i = 0; i < nranges - 1; i++)
+                {
+                    for (int j = 0; j < nranges - i - 1; j++)
+                    {
+                        if (ranges[j].type > ranges[j + 1].type)
+                        {
+                            Range3d temp = ranges[j + 1];
+                            ranges[j + 1] = ranges[j];
+                            ranges[j] = temp;
+                        }
+                    }
+                }
+
+                // TODO(max): start from here!!!!!!!
+
+                // TODO(max): use it properly
+                int rebuilded_mesh_types[BLOCK_TYPE_COUNT] = {};
+
+                int ranges_idx_start = 0;
+                int ranges_idx_end  = 0;
+                while (nranges > 0)
+                {
+                    int ranges_count = 0;
+                    uint8_t range_type = ranges[ranges_idx_start].type;
+                    while (ranges[ranges_idx_end].type == range_type)
+                    {
+                        ranges_count++;
+                        ranges_idx_end++;
+                    }
+                    nranges -= ranges_count;
+
+                    assert(range_type < BLOCK_TYPE_COUNT);
+                    Mesh *mesh_to_rebuild = &chunk_to_rebuild->meshes[range_type];
+
+                    int vs_arr_size = 3 * 12 * ranges_count * sizeof(Vec3f);
+                    int ns_arr_size = 3 * 12 * ranges_count * sizeof(Vec3f);
+                    Vec3f *vs = (Vec3f *)memory_arena_alloc(&arena, vs_arr_size + ns_arr_size);
+                    Vec3f *ns = vs + (3 * 12 * ranges_count);
+                    if (vs)
+                    {
+                        rebuilded_mesh_types[range_type] = 1;
+
+                        int v_idx = 0;
+                        mesh_to_rebuild->num_of_vs = 3 * 12 * ranges_count;
+                        for (int i = ranges_idx_start; i < ranges_idx_end; i++)
+                        {
+                            Vec3f base((float)ranges[i].start_x, (float)ranges[i].start_y, (float)ranges[i].start_z);
+
+                            float dim_x = (float)ranges[i].end_x - base.x + 1.0f;
+                            float dim_y = (float)ranges[i].end_y - base.y + 1.0f;
+                            float dim_z = (float)ranges[i].end_z - base.z + 1.0f;
+
+                            // TODO(max): check for correct winding order
+
+                            Vec3f bottom_n(0, -1, 0);
+                            Vec3f top_n(0, 1, 0);
+                            Vec3f north_n(0, 0, -1);
+                            Vec3f south_n(0, 0, 1);
+                            Vec3f west_n(-1, 0, 0);
+                            Vec3f east_n(1, 0, 0);
+
+                            // bottom tri 0
+                            vs[v_idx + 0 * 3 + 0] = base;
+                            vs[v_idx + 0 * 3 + 1] = base + Vec3f(dim_x, 0, 0);
+                            vs[v_idx + 0 * 3 + 2] = base + Vec3f(0, 0, dim_z);
+
+                            ns[v_idx + 0 * 3 + 0] = bottom_n;
+                            ns[v_idx + 0 * 3 + 1] = bottom_n;
+                            ns[v_idx + 0 * 3 + 2] = bottom_n;
+
+                            // bottom tri 1
+                            vs[v_idx + 1 * 3 + 0] = base + Vec3f(0, 0, dim_z);
+                            vs[v_idx + 1 * 3 + 1] = base + Vec3f(dim_x, 0, 0);
+                            vs[v_idx + 1 * 3 + 2] = base + Vec3f(dim_x, 0, dim_z);
+
+                            ns[v_idx + 1 * 3 + 0] = bottom_n;
+                            ns[v_idx + 1 * 3 + 1] = bottom_n;
+                            ns[v_idx + 1 * 3 + 2] = bottom_n;
+
+                            // top tri 0
+                            vs[v_idx + 2 * 3 + 0] = base + Vec3f(0, dim_y, 0);
+                            vs[v_idx + 2 * 3 + 1] = base + Vec3f(0, dim_y, dim_z);
+                            vs[v_idx + 2 * 3 + 2] = base + Vec3f(dim_x, dim_y, 0);
+
+                            ns[v_idx + 2 * 3 + 0] = top_n;
+                            ns[v_idx + 2 * 3 + 1] = top_n;
+                            ns[v_idx + 2 * 3 + 2] = top_n;
+
+                            // top tri 1
+                            vs[v_idx + 3 * 3 + 0] = base + Vec3f(0, dim_y, dim_z);
+                            vs[v_idx + 3 * 3 + 1] = base + Vec3f(dim_x, dim_y, dim_z);
+                            vs[v_idx + 3 * 3 + 2] = base + Vec3f(dim_x, dim_y, 0);
+
+                            ns[v_idx + 3 * 3 + 0] = top_n;
+                            ns[v_idx + 3 * 3 + 1] = top_n;
+                            ns[v_idx + 3 * 3 + 2] = top_n;
+
+                            // north tri 0
+                            vs[v_idx + 4 * 3 + 0] = base;
+                            vs[v_idx + 4 * 3 + 1] = base + Vec3f(0, dim_y, 0);
+                            vs[v_idx + 4 * 3 + 2] = base + Vec3f(dim_x, dim_y, 0);
+
+                            ns[v_idx + 4 * 3 + 0] = north_n;
+                            ns[v_idx + 4 * 3 + 1] = north_n;
+                            ns[v_idx + 4 * 3 + 2] = north_n;
+
+                            // north tri 1
+                            vs[v_idx + 5 * 3 + 0] = base;
+                            vs[v_idx + 5 * 3 + 1] = base + Vec3f(dim_x, dim_y, 0);
+                            vs[v_idx + 5 * 3 + 2] = base + Vec3f(dim_x, 0, 0);
+
+                            ns[v_idx + 5 * 3 + 0] = north_n;
+                            ns[v_idx + 5 * 3 + 1] = north_n;
+                            ns[v_idx + 5 * 3 + 2] = north_n;
+
+                            // south tri 0
+                            vs[v_idx + 6 * 3 + 0] = base + Vec3f(0, 0, dim_z);
+                            vs[v_idx + 6 * 3 + 1] = base + Vec3f(dim_x, dim_y, dim_z);
+                            vs[v_idx + 6 * 3 + 2] = base + Vec3f(0, dim_y, dim_z);
+
+                            ns[v_idx + 6 * 3 + 0] = south_n;
+                            ns[v_idx + 6 * 3 + 1] = south_n;
+                            ns[v_idx + 6 * 3 + 2] = south_n;
+
+                            // south tri 1
+                            vs[v_idx + 7 * 3 + 0] = base + Vec3f(0, 0, dim_z);
+                            vs[v_idx + 7 * 3 + 1] = base + Vec3f(dim_x, 0, dim_z);
+                            vs[v_idx + 7 * 3 + 2] = base + Vec3f(dim_x, dim_y, dim_z);
+
+                            ns[v_idx + 7 * 3 + 0] = south_n;
+                            ns[v_idx + 7 * 3 + 1] = south_n;
+                            ns[v_idx + 7 * 3 + 2] = south_n;
+
+                            // west tri 0
+                            vs[v_idx + 8 * 3 + 0] = base;
+                            vs[v_idx + 8 * 3 + 1] = base + Vec3f(0, dim_y, dim_z);
+                            vs[v_idx + 8 * 3 + 2] = base + Vec3f(0, dim_y, 0);
+
+                            ns[v_idx + 8 * 3 + 0] = west_n;
+                            ns[v_idx + 8 * 3 + 1] = west_n;
+                            ns[v_idx + 8 * 3 + 2] = west_n;
+
+                            // west tri 1
+                            vs[v_idx + 9 * 3 + 0] = base;
+                            vs[v_idx + 9 * 3 + 1] = base + Vec3f(0, 0, dim_z);
+                            vs[v_idx + 9 * 3 + 2] = base + Vec3f(0, dim_y, dim_z);
+
+                            ns[v_idx + 9 * 3 + 0] = west_n;
+                            ns[v_idx + 9 * 3 + 1] = west_n;
+                            ns[v_idx + 9 * 3 + 2] = west_n;
+
+                            // east tri 0
+                            vs[v_idx + 10 * 3 + 0] = base + Vec3f(dim_x, 0, 0);
+                            vs[v_idx + 10 * 3 + 1] = base + Vec3f(dim_x, dim_y, 0);
+                            vs[v_idx + 10 * 3 + 2] = base + Vec3f(dim_x, dim_y, dim_z);
+
+                            ns[v_idx + 10 * 3 + 0] = east_n;
+                            ns[v_idx + 10 * 3 + 1] = east_n;
+                            ns[v_idx + 10 * 3 + 2] = east_n;
+
+                            // east tri 1
+                            vs[v_idx + 11 * 3 + 0] = base + Vec3f(dim_x, 0, 0);
+                            vs[v_idx + 11 * 3 + 1] = base + Vec3f(dim_x, dim_y, dim_z);
+                            vs[v_idx + 11 * 3 + 2] = base + Vec3f(dim_x, 0, dim_z);
+
+                            ns[v_idx + 11 * 3 + 0] = east_n;
+                            ns[v_idx + 11 * 3 + 1] = east_n;
+                            ns[v_idx + 11 * 3 + 2] = east_n;
+
+                            v_idx += (3 * 12);
+                        }
+
+                        assert(v_idx == mesh_to_rebuild->num_of_vs);
+
+                        if (mesh_to_rebuild->vao == 0)
+                        {
+                            glGenVertexArrays(1, &mesh_to_rebuild->vao);
+                            glGenBuffers(1, &mesh_to_rebuild->vbo);
+                        }
+
+                        glBindVertexArray(mesh_to_rebuild->vao);
+                        glBindBuffer(GL_ARRAY_BUFFER, mesh_to_rebuild->vbo);
+
+                        glBufferData(GL_ARRAY_BUFFER, vs_arr_size + ns_arr_size, vs, GL_STREAM_DRAW);
+                        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, (void *)0);
+                        glEnableVertexAttribArray(0);
+                        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 3, (char *)(0) + vs_arr_size);
+                        glEnableVertexAttribArray(1);
+
+                        glBindVertexArray(0);
+                        glBindBuffer(GL_ARRAY_BUFFER, 0);
+                    }
+
+                    ranges_idx_start = ranges_idx_end;
+                }
+
+                // TODO(max):
+                //            generate mesh for each block type
+#if 0
                 int vs_arr_size = 3 * 12 * nranges * sizeof(Vec3f);
                 int ns_arr_size = 3 * 12 * nranges * sizeof(Vec3f);
                 Vec3f *vs = (Vec3f *)memory_arena_alloc(&arena, vs_arr_size + ns_arr_size);
@@ -1354,11 +1685,13 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     glBindVertexArray(0);
                     glBindBuffer(GL_ARRAY_BUFFER, 0);
                 }
+#endif
             }
         }
     }
     
     /* rendering */
+#if 0
     {
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
@@ -1394,13 +1727,14 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 float gray = 0.6f;
                 glUniform3f(glGetUniformLocation(state->shader_program, "u_color"), gray, gray, gray);
 
-                glBindVertexArray(c->vao);
-                glDrawArrays(GL_TRIANGLES, 0, c->num_of_vs);                
-                glBindVertexArray(0);
+                //glBindVertexArray(c->vao);
+                //glDrawArrays(GL_TRIANGLES, 0, c->num_of_vs);                
+                //glBindVertexArray(0);
             }
             c = c->next;
         }
     }
+#endif
 }
 
 void tests(void)
