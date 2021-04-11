@@ -1532,6 +1532,25 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     ranges_idx_start = ranges_idx_end;
                 }
 
+                for (int i = 0; i < BLOCK_TYPE_COUNT; i++)
+                {
+                    if (rebuilded_mesh_types[i] == 0)
+                    {
+                        Mesh *m = &chunk_to_rebuild->meshes[i];
+                        if (m->vao != 0)
+                        {
+                            assert(m->vao && m->vbo);
+
+                            glDeleteVertexArrays(1, &m->vao);
+                            glDeleteBuffers(1, &m->vbo);
+
+                            m->num_of_vs = 0;
+                            m->vao = 0;
+                            m->vbo = 0;
+                        }
+                    }
+                }
+
                 // TODO(max):
                 //            generate mesh for each block type
 #if 0
