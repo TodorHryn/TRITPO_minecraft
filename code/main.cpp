@@ -29,6 +29,13 @@ struct Vec3f
 
         struct
         {
+            float r;
+            float g;
+            float b;
+        };
+
+        struct
+        {
             float pitch;
             float roll;
             float yaw;
@@ -1354,18 +1361,19 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 // TODO(max): use it properly
                 int rebuilded_mesh_types[BLOCK_TYPE_COUNT] = {};
 
+                int ranges_left = nranges;
                 int ranges_idx_start = 0;
                 int ranges_idx_end  = 0;
-                while (nranges > 0)
+                while (ranges_left > 0)
                 {
                     int ranges_count = 0;
                     uint8_t range_type = ranges[ranges_idx_start].type;
-                    while (ranges[ranges_idx_end].type == range_type)
+                    while ((ranges_idx_end < nranges) && ranges[ranges_idx_end].type == range_type)
                     {
                         ranges_count++;
                         ranges_idx_end++;
                     }
-                    nranges -= ranges_count;
+                    ranges_left -= ranges_count;
 
                     assert(range_type < BLOCK_TYPE_COUNT);
                     Mesh *mesh_to_rebuild = &chunk_to_rebuild->meshes[range_type];
@@ -1710,7 +1718,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
     }
     
     /* rendering */
-#if 0
+#if 1
     {
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
@@ -1728,7 +1736,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 
         Mat4x4f view = mat4x4f_lookat(state->cam_pos, state->cam_pos + state->cam_view_dir, state->cam_up);
         glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_view"), 1, GL_FALSE, &view.m[0][0]);
-
+#if 0
         Chunk *c = state->world.next;
         while (c != 0)
         {
@@ -1749,6 +1757,43 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 //glBindVertexArray(c->vao);
                 //glDrawArrays(GL_TRIANGLES, 0, c->num_of_vs);                
                 //glBindVertexArray(0);
+            }
+            c = c->next;
+        }
+#endif
+        Chunk *c = state->world.next;
+        while (c != 0)
+        {
+            if (c->nblocks)
+            {
+                Vec3f chunk_offset(
+                    (float)(c->x * CHUNK_DIM),
+                    (float)(c->y * CHUNK_DIM),
+                    (float)(c->z * CHUNK_DIM));
+
+                Mat4x4f model = mat4x4f_identity();
+                model = mat4x4f_translate(model, chunk_offset);
+                glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_model"), 1, GL_FALSE, &model.m[0][0]);
+
+                for (int m_idx = 0; m_idx < BLOCK_TYPE_COUNT; m_idx++)
+                {
+                    Mesh *mesh = &c->meshes[m_idx];
+                    if (mesh->num_of_vs)
+                    {
+                        Vec3f colors[BLOCK_TYPE_COUNT] = {
+                            Vec3f(0, 1, 0),
+                            Vec3f(130 / 255.0f, 108 / 255.0f, 47 / 255.0f),
+                            Vec3f(0.4f, 0.4f, 0.4f),
+                            Vec3f(1, 1, 1),
+                        };
+
+                        Vec3f mesh_color = colors[m_idx];
+                        glUniform3f(glGetUniformLocation(state->shader_program, "u_color"), mesh_color.r, mesh_color.g, mesh_color.b);
+                        glBindVertexArray(mesh->vao);
+                        glDrawArrays(GL_TRIANGLES, 0, mesh->num_of_vs);
+                        glBindVertexArray(0);
+                    }
+                }
             }
             c = c->next;
         }
