@@ -1,4 +1,4 @@
-#include <stdio.h> // sprintf
+#include <stdio.h>
 #include <assert.h>
 
 #include "glad\glad.h"
@@ -439,80 +439,6 @@ void *memory_arena_alloc(Memory_arena *arena, int64_t size)
 
     return (result);
 }
-
-/*
-
-struct Material 
-{
-    Vec3f color;
-} g_materials[2] = {
-    Vec3f(0, 1, 0), // MATERIAL_GRASS
-    Vec3f(1, 0, 0)  // MATERIAL_DIRT
-};
-
-*/
-
-/*
-    struct Chunk
-    {
-        int x;
-        int y;
-        int z;
-        Chunk *next;
-        int nblocks;
-        uint8_t *blocks;
-        Mesh meshes[MATERIAL_LAST];
-    };
-    
-    {
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_BACK);
-        //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
-
-        glEnable(GL_DEPTH_TEST);
-        glClearColor(0.75f, 0.96f, 0.9f, 1);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        glUseProgram(state->shader_program);
-
-        Mat4x4f projection = mat4x4f_perspective(90.0f, input->aspect_ratio, 0.1f, 100.0f);
-        glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_projection"), 1, GL_FALSE, &projection.m[0][0]);
-
-        Mat4x4f view = mat4x4f_lookat(state->cam_pos, state->cam_pos + state->cam_view_dir, state->cam_up);
-        glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_view"), 1, GL_FALSE, &view.m[0][0]);
-
-        Chunk *c = state->world.next;
-        while (c != 0)
-        {
-            if (c->nblocks)
-            {
-                Vec3f chunk_offset(
-                    (float)(c->x * CHUNK_DIM),
-                    (float)(c->y * CHUNK_DIM),
-                    (float)(c->z * CHUNK_DIM));
-
-                Mat4x4f model = mat4x4f_identity();
-                model = mat4x4f_translate(model, chunk_offset);
-                glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_model"), 1, GL_FALSE, &model.m[0][0]);
-                
-                for (int m_idx = 0; m_idx < MATERIAL_LAST; m_idx++)
-                {
-                    Mesh *mesh = &c->meshes[m_idx];
-                    if (mesh->num_of_vs)
-                    {
-                        Material mat = g_materials[m_idx];
-                        glUniform3f(glGetUniformLocation(state->shader_program, "u_color"), mat.color.r, mat.color.g, mat.color.b);
-                        glBindVertexArray(m->vao);
-                        glDrawArrays(GL_TRIANGLES, 0, m->num_of_vs);
-                        glBindVertexArray(0);
-                    }
-                }
-            }
-            c = c->next;
-        }
-    }
-*/
 
 enum Block_type
 {
@@ -1098,7 +1024,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
         }
 
         {
-            Chunk *c = world_add_chunk(&state->world, &state->arena, 4, -2, -3);
+            Chunk *c = world_add_chunk(&state->world, &state->arena, 1, -2, -3);
 
             int i = 0;
             for (int y = 0; y < 8; y++)
