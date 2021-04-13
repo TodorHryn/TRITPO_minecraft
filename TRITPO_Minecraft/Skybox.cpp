@@ -1,15 +1,20 @@
 #include "Skybox.h"
 #include <iostream>
 
-#define GLEW_STATIC
-#include <GL/glew.h>
+#include "glad\glad.h"
 #include "stb_image.h"
 
+Skybox::Skybox() {
+}
+
 Skybox::Skybox(std::string filename) {
+	load(filename);
+}
+
+void Skybox::load(std::string filename) {
 	glGenTextures(1, &textureId);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, textureId);
 
-	stbi_set_flip_vertically_on_load(true);
 	int width, height, n;
 
 	for (unsigned int i = 0; i < 6; ++i) {

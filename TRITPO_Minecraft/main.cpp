@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <assert.h>
+#include <iostream>
 
 #include "glad\glad.h"
 #include "GLFW\glfw3.h"
@@ -7,12 +8,21 @@
 #include "stb_image.h"
 
 #include "glad.c"
-#include "3DMath.hpp"
+#include "glm\gtc\matrix_transform.hpp"
+#include "glm\gtc\type_ptr.hpp"
+#include "ShaderProgram.h"
+#include "Skybox.h"
+
+#include "3DMath.h"
 
 #define MEMORY_KB(x) ((x) * 1024ull)
 #define MEMORY_MB(x) MEMORY_KB((x) * 1024ull)
 #define MEMORY_GB(x) MEMORY_MB((x) * 1024ull)
 #define TO_RADIANS(deg) ((PI / 180.0f) * deg)
+
+unsigned int skyboxVAO, skyboxVBO;
+ShaderProgram skyboxSP;
+Skybox skybox;
 
 struct Button
 {
@@ -193,6 +203,7 @@ struct Game_state
     GLuint vertex_shader;
     GLuint fragment_shader;
     GLuint shader_program;
+
 
     Vec3f cam_pos;
     Vec3f cam_view_dir;
@@ -1150,14 +1161,13 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
         glCullFace(GL_BACK);
         //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-
-        glEnable(GL_DEPTH_TEST);
+		glEnable(GL_DEPTH_TEST);
         glClearColor(0.75f, 0.96f, 0.9f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glUseProgram(state->shader_program);
+		glUseProgram(state->shader_program);
 
-        Mat4x4f projection = mat4x4f_perspective(90.0f, input->aspect_ratio, 0.1f, 100.0f);
+		Mat4x4f projection = mat4x4f_perspective(90.0f, input->aspect_ratio, 0.1f, 100.0f);
         glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_projection"), 1, GL_FALSE, &projection.m[0][0]);
 
         Mat4x4f view = mat4x4f_lookat(state->cam_pos, state->cam_pos + state->cam_view_dir, state->cam_up);
@@ -1199,6 +1209,30 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
             }
             c = c->next;
         }
+
+		float ambient = 0.5f; //TODO
+
+		//Skybox
+		glm::mat4 viewMatrix;
+
+		for (int x = 0; x < 4; ++x)
+			for (int y = 0; y < 4; ++y)
+				viewMatrix[x][y] = view.m[x][y];
+
+		glDepthFunc(GL_LEQUAL);
+		glEnable(GL_DEPTH_CLAMP);
+	
+		skyboxSP.use();
+		glUniform1f(glGetUniformLocation(skyboxSP.get(), "ambientStrength"), ambient * 2);
+		skyboxSP.setMatrix4fv("view", glm::mat4(glm::mat3(viewMatrix)));
+		skyboxSP.setMatrix4fv("projection", &projection.m[0][0]);
+		glBindVertexArray(skyboxVAO);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, skybox.texture());
+		glDrawArrays(GL_TRIANGLES, 0, 36);
+		glBindVertexArray(0);
+		glDepthFunc(GL_LESS);
+		glDisable(GL_DEPTH_CLAMP);
     }
 }
 
@@ -1228,6 +1262,51 @@ void tests(void)
 
 int main(void)
 {
+		float skyboxVertices[] = {
+        // positions          
+        -1.0f,  1.0f, -1.0f,
+        -1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+
+        -1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+
+        -1.0f, -1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+
+        -1.0f,  1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f, -1.0f,
+
+        -1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f
+    };
+
     tests();
 
     if (glfwInit() == GLFW_FALSE)
@@ -1279,6 +1358,19 @@ int main(void)
 
     double prev_mx = (float)window_width / 2.0f;
     double prev_my = (float)window_height / 2.0f;
+
+	skyboxSP.load("skybox");
+	skybox.load("Images/cubemap");
+
+	// skybox VAO
+    glGenVertexArrays(1, &skyboxVAO);
+    glGenBuffers(1, &skyboxVBO);
+    glBindVertexArray(skyboxVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*) 0);
+	glBindVertexArray(0);
 
     while (!glfwWindowShouldClose(window))
     {

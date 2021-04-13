@@ -10,5 +10,5 @@ void main() {
 	vec3 lightColor = vec3(1.0f, 1.0f, 1.0f);
 	vec3 light = lightColor * ambientStrength;
 
-    FragColor = texture(skybox, TexCoords) * vec4(light, 1.0f);
+    FragColor = texture(skybox, TexCoords);
 }
