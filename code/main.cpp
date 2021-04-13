@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include <stdio.h> // sprintf
 #include <assert.h>
 
 #include "glad\glad.h"
@@ -899,10 +899,10 @@ const char *fragment_shader_src =
     "void main() {\n"
     "    vec3 light_pos = vec3(60.0f, 60.0f, 0.0f);\n"
     "    vec3 light_col = vec3(1, 1, 1);\n"
-    "    float ambient_factor = 0.5f;\n"
+    "    float ambient_factor = 0.3f;\n"
     "    vec3 ambient_col = ambient_factor * light_col;\n"
     "    vec3 diffuse_col = light_col * max(0, dot(normal, normalize(light_pos - world_pos)));\n"
-    "    frag_color = vec4(u_color * (ambient_col + diffuse_col), 1.0f);\n"
+    "    frag_color = vec4(u_color * clamp(ambient_col + diffuse_col, 0.0f, 1.0f), 1.0f);\n"
     "}\n\0";
 
 void game_update_and_render(Game_input *input, Game_memory *memory)
