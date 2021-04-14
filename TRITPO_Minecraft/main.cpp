@@ -113,21 +113,6 @@ struct Mesh
 #define CHUNK_DIM (1 << 4)
 #define BLOCKS_IN_CHUNK ((CHUNK_DIM) * (CHUNK_DIM) * (CHUNK_DIM))
 
-#if 0
-struct Chunk
-{
-    int x;
-    int y;
-    int z;
-    int nblocks;
-    uint8_t *blocks;
-    Chunk *next;
-
-    int num_of_vs;
-    GLuint vao;
-    GLuint vbo;
-};
-#else
 struct Chunk
 {
     int x;
@@ -138,7 +123,6 @@ struct Chunk
     uint8_t *blocks;
     Mesh meshes[BLOCK_TYPE_COUNT];
 };
-#endif
 
 #define REBUILD_STACK_SIZE 32
 struct World
@@ -531,36 +515,6 @@ void gen_ranges_3d(uint8_t *blocks, Range3d *ranges, uint8_t *visited, int dim, 
     assert(count == 0);
     *num_of_ranges = ranges_count;
 }
-
-const char *vertex_shader_src = 
-    "#version 330 core\n"
-    "layout (location = 0) in vec3 aVertexPos;\n"
-    "layout (location = 1) in vec3 aVertexNormal;\n"
-    "uniform mat4 u_projection;\n"
-    "uniform mat4 u_view;\n"
-    "uniform mat4 u_model;\n"
-    "out vec3 normal;\n"
-    "out vec3 world_pos;\n"
-    "void main() {\n"
-    "   gl_Position = u_projection * u_view * u_model * vec4(aVertexPos, 1.0f);\n"
-    "   normal = aVertexNormal;\n"
-    "   world_pos = (u_model * vec4(aVertexPos, 1.0f)).xyz;\n"
-    "}\n\0";
-
-const char *fragment_shader_src =
-    "#version 330 core\n"
-    "uniform vec3 u_color;\n"
-    "in vec3 normal;\n"
-    "in vec3 world_pos;\n"
-    "out vec4 frag_color;\n"
-    "void main() {\n"
-    "    vec3 light_pos = vec3(60.0f, 60.0f, 0.0f);\n"
-    "    vec3 light_col = vec3(1, 1, 1);\n"
-    "    float ambient_factor = 0.3f;\n"
-    "    vec3 ambient_col = ambient_factor * light_col;\n"
-    "    vec3 diffuse_col = light_col * max(0, dot(normal, normalize(light_pos - world_pos)));\n"
-    "    frag_color = vec4(u_color * clamp(ambient_col + diffuse_col, 0.0f, 1.0f), 1.0f);\n"
-    "}\n\0";
 
 void game_state_and_memory_init(Game_memory *memory)
 {
@@ -1146,11 +1100,9 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 
 		Mat4x4f projection = mat4x4f_perspective(90.0f, input->aspect_ratio, 0.1f, 100.0f);
         state->mesh_sp.setMatrix4fv("u_projection", &projection.m[0][0]);
-        //glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_projection"), 1, GL_FALSE, &projection.m[0][0]);
 
         Mat4x4f view = mat4x4f_lookat(state->cam_pos, state->cam_pos + state->cam_view_dir, state->cam_up);
         state->mesh_sp.setMatrix4fv("u_view", &view.m[0][0]);
-        //glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_view"), 1, GL_FALSE, &view.m[0][0]);
 
         Chunk *c = state->world.next;
         while (c != 0)
@@ -1165,7 +1117,6 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 Mat4x4f model = mat4x4f_identity();
                 model = mat4x4f_translate(model, chunk_offset);
                 state->mesh_sp.setMatrix4fv("u_model", &model.m[0][0]);
-                //glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_model"), 1, GL_FALSE, &model.m[0][0]);
 
                 for (int m_idx = 0; m_idx < BLOCK_TYPE_COUNT; m_idx++)
                 {
