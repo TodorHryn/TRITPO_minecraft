@@ -20,10 +20,6 @@
 #define MEMORY_GB(x) MEMORY_MB((x) * 1024ull)
 #define TO_RADIANS(deg) ((PI / 180.0f) * deg)
 
-unsigned int skyboxVAO, skyboxVBO;
-ShaderProgram skyboxSP;
-Skybox skybox;
-
 struct Button
 {
     int is_pressed;
@@ -196,6 +192,10 @@ Chunk *world_add_chunk(World *world, Memory_arena *arena, int x, int y, int z)
     return (result);
 }
 
+//unsigned int skyboxVAO, skyboxVBO;
+//ShaderProgram skyboxSP;
+//Skybox skybox;
+
 struct Game_state
 {
     Memory_arena arena;
@@ -204,6 +204,10 @@ struct Game_state
     GLuint fragment_shader;
     GLuint shader_program;
 
+    GLuint skyboxVAO;
+    GLuint skyboxVBO;
+    ShaderProgram skyboxSP;
+    Skybox skybox;
 
     Vec3f cam_pos;
     Vec3f cam_view_dir;
@@ -560,215 +564,236 @@ const char *fragment_shader_src =
     "    frag_color = vec4(u_color * clamp(ambient_col + diffuse_col, 0.0f, 1.0f), 1.0f);\n"
     "}\n\0";
 
-void game_update_and_render(Game_input *input, Game_memory *memory)
+void game_state_and_memory_init(Game_memory *memory)
 {
-    float vertices[] = {
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-         0.5f, -0.5f, -0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 0.0f,
-
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 1.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-
-        -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-        -0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-        -0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f, -0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f, -0.5f,  0.5f,  1.0f, 0.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, 0.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, 1.0f,
-
-        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f,
-         0.5f,  0.5f, -0.5f,  1.0f, 1.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f, 0.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f, 0.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f, 1.0f
-    };
+    assert(!memory->is_initialized);
 
     assert(sizeof(Game_state) <= memory->permanent_mem_size);
     Game_state *state = (Game_state *)memory->permanent_mem;
-    if (!memory->is_initialized)
+
+    memory->is_initialized = 1;
+
+    float skyboxVertices[] = {
+        // positions          
+        -1.0f,  1.0f, -1.0f,
+        -1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+
+        -1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+
+        -1.0f, -1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+
+        -1.0f,  1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f, -1.0f,
+
+        -1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f
+    };
+
+    state->arena.curr = (uint8_t *)ALIGN_PTR_UP(&state[1], 8);
+    state->arena.end = (uint8_t *)memory->permanent_mem + memory->permanent_mem_size;
+
+    state->world.next = 0;
+    state->world.rebuild_stack_top = 0;
+
     {
-        memory->is_initialized = 1;
+        Chunk *c = world_add_chunk(&state->world, &state->arena, 0, 0, 0);
 
-        state->arena.curr = (uint8_t *)ALIGN_PTR_UP(&state[1], 8);
-        state->arena.end = (uint8_t *)memory->permanent_mem + memory->permanent_mem_size;
-
-        state->world.next = 0;
-        state->world.rebuild_stack_top = 0;
-
+        int i = 0;
+        for (int y = 0; y < 4; y++)
         {
-            Chunk *c = world_add_chunk(&state->world, &state->arena, 0, 0, 0);
-            
-            int i = 0;
-            for (int y = 0; y < 4; y++)
+            for (int z = 0; z < CHUNK_DIM; z++)
             {
-                for (int z = 0; z < CHUNK_DIM; z++)
+                for (int x = 0; x < CHUNK_DIM; x++)
                 {
-                    for (int x = 0; x < CHUNK_DIM; x++)
-                    {
-                        c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = BLOCK_DIRT;
-                        c->nblocks++;
-                        i++;
-                    }
+                    c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = BLOCK_DIRT;
+                    c->nblocks++;
+                    i++;
                 }
             }
-            world_push_chunk_for_rebuild(&state->world, c);
         }
-
-        {
-            Chunk *c = world_add_chunk(&state->world, &state->arena, -1, 0, -1);
-            
-            int i = 0;
-            for (int y = 0; y < 6; y++)
-            {
-                for (int z = 0; z < CHUNK_DIM; z++)
-                {
-                    for (int x = 0; x < CHUNK_DIM; x++)
-                    {
-                        if (i % 5 == 0)
-                        {
-                            c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = BLOCK_DIRT;
-                            c->nblocks++;
-                        }
-                        i++;
-                    }
-                }
-            }
-            world_push_chunk_for_rebuild(&state->world, c);
-        }
-
-        {
-            Chunk *c = world_add_chunk(&state->world, &state->arena, -1, 0, 0);
-
-            int i = 0;
-            for (int y = 0; y < 2; y++)
-            {
-                for (int z = 0; z < CHUNK_DIM; z++)
-                {
-                    for (int x = 0; x < CHUNK_DIM; x++)
-                    {
-                        c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = BLOCK_DIRT;
-                        c->nblocks++;
-                        i++;
-                    }
-                }
-            }
-            world_push_chunk_for_rebuild(&state->world, c);
-        }
-
-        {
-            Chunk *c = world_add_chunk(&state->world, &state->arena, 1, -2, -3);
-
-            int i = 0;
-            for (int y = 0; y < 8; y++)
-            {
-                for (int z = 0; z < CHUNK_DIM; z++)
-                {
-                    for (int x = 0; x < CHUNK_DIM; x++)
-                    {
-                        uint8_t block_type;
-                        if (y < 2)
-                            block_type = BLOCK_STONE;
-                        else if (y < 4)
-                            block_type = BLOCK_DIRT;
-                        else if (y < 6)
-                            block_type = BLOCK_GRASS;
-                        else
-                            block_type = BLOCK_STONE;
-
-                        c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = block_type;
-                        c->nblocks++;
-                        i++;
-                    }
-                }
-            }
-            world_push_chunk_for_rebuild(&state->world, c);
-        }
-
-        state->cam_pos = Vec3f(0, 20, 0);
-        state->cam_up = Vec3f(0, 1, 0);
-
-        state->cam_rot.pitch = 0.0f;
-        state->cam_rot.roll = 0.0f;
-        state->cam_rot.yaw = -90.0f;
-
-        state->cam_view_dir.x = cosf(TO_RADIANS(state->cam_rot.yaw)) * cosf(TO_RADIANS(state->cam_rot.pitch));
-        state->cam_view_dir.y = sinf(TO_RADIANS(state->cam_rot.pitch));
-        state->cam_view_dir.z = sinf(TO_RADIANS(state->cam_rot.yaw)) * cosf(TO_RADIANS(state->cam_rot.pitch));
-
-        state->cam_move_dir.x = state->cam_view_dir.x;
-        state->cam_move_dir.y = 0.0f;
-        state->cam_move_dir.z = state->cam_view_dir.z;
-
-        state->vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-        glShaderSource(state->vertex_shader, 1, &vertex_shader_src, 0);
-        glCompileShader(state->vertex_shader);
-
-        GLint success = 0;
-
-        glGetShaderiv(state->vertex_shader, GL_COMPILE_STATUS, &success);
-        if (success == GL_FALSE)
-        {
-            char log_buf[256] = {};
-            glGetShaderInfoLog(state->vertex_shader, sizeof(log_buf), 0, log_buf);
-            OutputDebugString(log_buf);
-            assert(0);
-        }
-
-        state->fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(state->fragment_shader, 1, &fragment_shader_src, 0);
-        glCompileShader(state->fragment_shader);
-
-        glGetShaderiv(state->fragment_shader, GL_COMPILE_STATUS, &success);
-        if (success == GL_FALSE)
-        {
-            char log_buf[256] = {};
-            glGetShaderInfoLog(state->fragment_shader, sizeof(log_buf), 0, log_buf);
-            OutputDebugString(log_buf);
-            assert(0);
-        }
-
-        state->shader_program = glCreateProgram();
-        glAttachShader(state->shader_program, state->vertex_shader);
-        glAttachShader(state->shader_program, state->fragment_shader);
-        glLinkProgram(state->shader_program);
-
-        glGetProgramiv(state->shader_program, GL_LINK_STATUS, &success);
-        if (success == GL_FALSE)
-        {
-            char log_buf[256] = {};
-            glGetProgramInfoLog(state->shader_program, sizeof(log_buf), 0, log_buf);
-            
-            glDeleteProgram(state->shader_program);
-            glDeleteShader(state->vertex_shader);
-            glDeleteShader(state->fragment_shader);
-
-            OutputDebugString(log_buf);
-            assert(0);
-        }
+        world_push_chunk_for_rebuild(&state->world, c);
     }
+
+    {
+        Chunk *c = world_add_chunk(&state->world, &state->arena, -1, 0, -1);
+
+        int i = 0;
+        for (int y = 0; y < 6; y++)
+        {
+            for (int z = 0; z < CHUNK_DIM; z++)
+            {
+                for (int x = 0; x < CHUNK_DIM; x++)
+                {
+                    if (i % 5 == 0)
+                    {
+                        c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = BLOCK_DIRT;
+                        c->nblocks++;
+                    }
+                    i++;
+                }
+            }
+        }
+        world_push_chunk_for_rebuild(&state->world, c);
+    }
+
+    {
+        Chunk *c = world_add_chunk(&state->world, &state->arena, -1, 0, 0);
+
+        int i = 0;
+        for (int y = 0; y < 2; y++)
+        {
+            for (int z = 0; z < CHUNK_DIM; z++)
+            {
+                for (int x = 0; x < CHUNK_DIM; x++)
+                {
+                    c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = BLOCK_DIRT;
+                    c->nblocks++;
+                    i++;
+                }
+            }
+        }
+        world_push_chunk_for_rebuild(&state->world, c);
+    }
+
+    {
+        Chunk *c = world_add_chunk(&state->world, &state->arena, 1, -2, -3);
+
+        int i = 0;
+        for (int y = 0; y < 8; y++)
+        {
+            for (int z = 0; z < CHUNK_DIM; z++)
+            {
+                for (int x = 0; x < CHUNK_DIM; x++)
+                {
+                    uint8_t block_type;
+                    if (y < 2)
+                        block_type = BLOCK_STONE;
+                    else if (y < 4)
+                        block_type = BLOCK_DIRT;
+                    else if (y < 6)
+                        block_type = BLOCK_GRASS;
+                    else
+                        block_type = BLOCK_STONE;
+
+                    c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = block_type;
+                    c->nblocks++;
+                    i++;
+                }
+            }
+        }
+        world_push_chunk_for_rebuild(&state->world, c);
+    }
+
+    state->cam_pos = Vec3f(0, 20, 0);
+    state->cam_up = Vec3f(0, 1, 0);
+
+    state->cam_rot.pitch = 0.0f;
+    state->cam_rot.roll = 0.0f;
+    state->cam_rot.yaw = -90.0f;
+
+    state->cam_view_dir.x = cosf(TO_RADIANS(state->cam_rot.yaw)) * cosf(TO_RADIANS(state->cam_rot.pitch));
+    state->cam_view_dir.y = sinf(TO_RADIANS(state->cam_rot.pitch));
+    state->cam_view_dir.z = sinf(TO_RADIANS(state->cam_rot.yaw)) * cosf(TO_RADIANS(state->cam_rot.pitch));
+
+    state->cam_move_dir.x = state->cam_view_dir.x;
+    state->cam_move_dir.y = 0.0f;
+    state->cam_move_dir.z = state->cam_view_dir.z;
+
+    state->vertex_shader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(state->vertex_shader, 1, &vertex_shader_src, 0);
+    glCompileShader(state->vertex_shader);
+
+    GLint success = 0;
+
+    glGetShaderiv(state->vertex_shader, GL_COMPILE_STATUS, &success);
+    if (success == GL_FALSE)
+    {
+        char log_buf[256] = {};
+        glGetShaderInfoLog(state->vertex_shader, sizeof(log_buf), 0, log_buf);
+        OutputDebugString(log_buf);
+        assert(0);
+    }
+
+    state->fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(state->fragment_shader, 1, &fragment_shader_src, 0);
+    glCompileShader(state->fragment_shader);
+
+    glGetShaderiv(state->fragment_shader, GL_COMPILE_STATUS, &success);
+    if (success == GL_FALSE)
+    {
+        char log_buf[256] = {};
+        glGetShaderInfoLog(state->fragment_shader, sizeof(log_buf), 0, log_buf);
+        OutputDebugString(log_buf);
+        assert(0);
+    }
+
+    state->shader_program = glCreateProgram();
+    glAttachShader(state->shader_program, state->vertex_shader);
+    glAttachShader(state->shader_program, state->fragment_shader);
+    glLinkProgram(state->shader_program);
+
+    glGetProgramiv(state->shader_program, GL_LINK_STATUS, &success);
+    if (success == GL_FALSE)
+    {
+        char log_buf[256] = {};
+        glGetProgramInfoLog(state->shader_program, sizeof(log_buf), 0, log_buf);
+
+        glDeleteProgram(state->shader_program);
+        glDeleteShader(state->vertex_shader);
+        glDeleteShader(state->fragment_shader);
+
+        OutputDebugString(log_buf);
+        assert(0);
+    }
+
+    // NOTE(max): call constructors on existing memory
+    new (&state->skyboxSP) ShaderProgram("skybox");
+    new (&state->skybox) Skybox("Images/cubemap");
+
+    // skybox VAO
+    glGenVertexArrays(1, &state->skyboxVAO);
+    glGenBuffers(1, &state->skyboxVBO);
+    glBindVertexArray(state->skyboxVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, state->skyboxVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glBindVertexArray(0);
+}
+
+void game_update_and_render(Game_input *input, Game_memory *memory)
+{
+    assert(memory->is_initialized);
+    Game_state *state = (Game_state *)memory->permanent_mem;
 
     /* logic update */
     {
@@ -1222,13 +1247,13 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		glDepthFunc(GL_LEQUAL);
 		glEnable(GL_DEPTH_CLAMP);
 	
-		skyboxSP.use();
-		glUniform1f(glGetUniformLocation(skyboxSP.get(), "ambientStrength"), ambient * 2);
-		skyboxSP.setMatrix4fv("view", glm::mat4(glm::mat3(viewMatrix)));
-		skyboxSP.setMatrix4fv("projection", &projection.m[0][0]);
-		glBindVertexArray(skyboxVAO);
+		state->skyboxSP.use();
+		glUniform1f(glGetUniformLocation(state->skyboxSP.get(), "ambientStrength"), ambient * 2);
+		state->skyboxSP.setMatrix4fv("view", glm::mat4(glm::mat3(viewMatrix)));
+		state->skyboxSP.setMatrix4fv("projection", &projection.m[0][0]);
+		glBindVertexArray(state->skyboxVAO);
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_CUBE_MAP, skybox.texture());
+		glBindTexture(GL_TEXTURE_CUBE_MAP, state->skybox.texture());
 		glDrawArrays(GL_TRIANGLES, 0, 36);
 		glBindVertexArray(0);
 		glDepthFunc(GL_LESS);
@@ -1236,78 +1261,8 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
     }
 }
 
-void tests(void)
-{
-    {
-        int k = 8;
-        for (int i = 1; i < 32; i++)
-        {
-            int t = ALIGN_UP(i, k);
-            assert((t % k) == 0);
-        }
-    }
-
-    {
-        static uint8_t bytes[1024];
-        Memory_arena arena = {};
-        arena.curr = bytes;
-        arena.end = bytes + 1024;
-
-        uint8_t *ptr = 0;        
-        ptr = (uint8_t *)memory_arena_alloc(&arena, 13);
-        ptr = (uint8_t *)memory_arena_alloc(&arena, 8);
-        ptr = (uint8_t *)memory_arena_alloc(&arena, 1003);
-    }
-}
-
 int main(void)
 {
-		float skyboxVertices[] = {
-        // positions          
-        -1.0f,  1.0f, -1.0f,
-        -1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-         1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
-
-        -1.0f, -1.0f,  1.0f,
-        -1.0f, -1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f,  1.0f,
-        -1.0f, -1.0f,  1.0f,
-
-         1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-
-        -1.0f, -1.0f,  1.0f,
-        -1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f, -1.0f,  1.0f,
-        -1.0f, -1.0f,  1.0f,
-
-        -1.0f,  1.0f, -1.0f,
-         1.0f,  1.0f, -1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-        -1.0f,  1.0f,  1.0f,
-        -1.0f,  1.0f, -1.0f,
-
-        -1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f,  1.0f,
-         1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f,  1.0f,
-         1.0f, -1.0f,  1.0f
-    };
-
-    tests();
 
     if (glfwInit() == GLFW_FALSE)
     {
@@ -1349,6 +1304,8 @@ int main(void)
     game_memory.transient_mem_size = TRANSIENT_MEM_SIZE;
     game_memory.transient_mem = transient_mem_blob;
 
+    game_state_and_memory_init(&game_memory);
+
     Game_input inputs[2] = {};
     Game_input *game_input = &inputs[0];
     Game_input *prev_game_input = &inputs[1];
@@ -1358,19 +1315,6 @@ int main(void)
 
     double prev_mx = (float)window_width / 2.0f;
     double prev_my = (float)window_height / 2.0f;
-
-	skyboxSP.load("skybox");
-	skybox.load("Images/cubemap");
-
-	// skybox VAO
-    glGenVertexArrays(1, &skyboxVAO);
-    glGenBuffers(1, &skyboxVBO);
-    glBindVertexArray(skyboxVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*) 0);
-	glBindVertexArray(0);
 
     while (!glfwWindowShouldClose(window))
     {
