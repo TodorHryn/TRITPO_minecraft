@@ -28,8 +28,18 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="skybox.frag" />
-    <None Include="skybox.vert" />
+    <None Include="skybox.frag">
+      <Filter>Исходные файлы</Filter>
+    </None>
+    <None Include="skybox.vert">
+      <Filter>Исходные файлы</Filter>
+    </None>
+    <None Include="mesh.vert">
+      <Filter>Исходные файлы</Filter>
+    </None>
+    <None Include="mesh.frag">
+      <Filter>Исходные файлы</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Skybox.h">

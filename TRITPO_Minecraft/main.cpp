@@ -200,14 +200,12 @@ struct Game_state
 {
     Memory_arena arena;
 
-    GLuint vertex_shader;
-    GLuint fragment_shader;
-    GLuint shader_program;
+    ShaderProgram mesh_sp;
 
-    GLuint skyboxVAO;
-    GLuint skyboxVBO;
     ShaderProgram skyboxSP;
     Skybox skybox;
+    GLuint skyboxVAO;
+    GLuint skyboxVBO;
 
     Vec3f cam_pos;
     Vec3f cam_view_dir;
@@ -728,54 +726,8 @@ void game_state_and_memory_init(Game_memory *memory)
     state->cam_move_dir.y = 0.0f;
     state->cam_move_dir.z = state->cam_view_dir.z;
 
-    state->vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(state->vertex_shader, 1, &vertex_shader_src, 0);
-    glCompileShader(state->vertex_shader);
-
-    GLint success = 0;
-
-    glGetShaderiv(state->vertex_shader, GL_COMPILE_STATUS, &success);
-    if (success == GL_FALSE)
-    {
-        char log_buf[256] = {};
-        glGetShaderInfoLog(state->vertex_shader, sizeof(log_buf), 0, log_buf);
-        OutputDebugString(log_buf);
-        assert(0);
-    }
-
-    state->fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(state->fragment_shader, 1, &fragment_shader_src, 0);
-    glCompileShader(state->fragment_shader);
-
-    glGetShaderiv(state->fragment_shader, GL_COMPILE_STATUS, &success);
-    if (success == GL_FALSE)
-    {
-        char log_buf[256] = {};
-        glGetShaderInfoLog(state->fragment_shader, sizeof(log_buf), 0, log_buf);
-        OutputDebugString(log_buf);
-        assert(0);
-    }
-
-    state->shader_program = glCreateProgram();
-    glAttachShader(state->shader_program, state->vertex_shader);
-    glAttachShader(state->shader_program, state->fragment_shader);
-    glLinkProgram(state->shader_program);
-
-    glGetProgramiv(state->shader_program, GL_LINK_STATUS, &success);
-    if (success == GL_FALSE)
-    {
-        char log_buf[256] = {};
-        glGetProgramInfoLog(state->shader_program, sizeof(log_buf), 0, log_buf);
-
-        glDeleteProgram(state->shader_program);
-        glDeleteShader(state->vertex_shader);
-        glDeleteShader(state->fragment_shader);
-
-        OutputDebugString(log_buf);
-        assert(0);
-    }
-
     // NOTE(max): call constructors on existing memory
+    new (&state->mesh_sp) ShaderProgram("mesh");
     new (&state->skyboxSP) ShaderProgram("skybox");
     new (&state->skybox) Skybox("Images/cubemap");
 
@@ -1190,13 +1142,15 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
         glClearColor(0.75f, 0.96f, 0.9f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		glUseProgram(state->shader_program);
+        state->mesh_sp.use();
 
 		Mat4x4f projection = mat4x4f_perspective(90.0f, input->aspect_ratio, 0.1f, 100.0f);
-        glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_projection"), 1, GL_FALSE, &projection.m[0][0]);
+        state->mesh_sp.setMatrix4fv("u_projection", &projection.m[0][0]);
+        //glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_projection"), 1, GL_FALSE, &projection.m[0][0]);
 
         Mat4x4f view = mat4x4f_lookat(state->cam_pos, state->cam_pos + state->cam_view_dir, state->cam_up);
-        glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_view"), 1, GL_FALSE, &view.m[0][0]);
+        state->mesh_sp.setMatrix4fv("u_view", &view.m[0][0]);
+        //glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_view"), 1, GL_FALSE, &view.m[0][0]);
 
         Chunk *c = state->world.next;
         while (c != 0)
@@ -1210,7 +1164,8 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 
                 Mat4x4f model = mat4x4f_identity();
                 model = mat4x4f_translate(model, chunk_offset);
-                glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_model"), 1, GL_FALSE, &model.m[0][0]);
+                state->mesh_sp.setMatrix4fv("u_model", &model.m[0][0]);
+                //glUniformMatrix4fv(glGetUniformLocation(state->shader_program, "u_model"), 1, GL_FALSE, &model.m[0][0]);
 
                 for (int m_idx = 0; m_idx < BLOCK_TYPE_COUNT; m_idx++)
                 {
@@ -1225,7 +1180,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                         };
 
                         Vec3f mesh_color = colors[m_idx];
-                        glUniform3f(glGetUniformLocation(state->shader_program, "u_color"), mesh_color.r, mesh_color.g, mesh_color.b);
+                        glUniform3f(glGetUniformLocation(state->mesh_sp.get(), "u_color"), mesh_color.r, mesh_color.g, mesh_color.b);
                         glBindVertexArray(mesh->vao);
                         glDrawArrays(GL_TRIANGLES, 0, mesh->num_of_vs);
                         glBindVertexArray(0);
