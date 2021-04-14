@@ -90,6 +90,17 @@ void *memory_arena_alloc(Memory_arena *arena, int64_t size)
     return (result);
 }
 
+inline void *memory_arena_get_cursor(Memory_arena *arena)
+{
+    return (arena->curr);
+}
+
+inline void memory_arena_set_cursor(Memory_arena *arena, void *cursor)
+{
+    assert(cursor <= (void *)arena->end);
+    arena->curr = (uint8_t *)cursor;
+}
+
 enum Block_type
 {
     BLOCK_GRASS,
@@ -842,9 +853,6 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
             uint8_t *visited = (uint8_t *)memory_arena_alloc(&arena, BLOCKS_IN_CHUNK * sizeof(uint8_t));
             if (ranges && visited)
             {
-                //static int rebuild_count = 0;
-                //printf("%d: rebuild\n", rebuild_count++);
-                
                 for (int i = 0; i < (BLOCKS_IN_CHUNK); i++) visited[i] = 0;
              
                 int nranges = 0;
@@ -869,8 +877,11 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 int ranges_left = nranges;
                 int ranges_idx_start = 0;
                 int ranges_idx_end  = 0;
+                void *arena_cursor = memory_arena_get_cursor(&arena);
                 while (ranges_left > 0)
                 {
+                    memory_arena_set_cursor(&arena, arena_cursor);
+
                     int ranges_count = 0;
                     uint8_t range_type = ranges[ranges_idx_start].type;
                     while ((ranges_idx_end < nranges) && ranges[ranges_idx_end].type == range_type)
@@ -886,6 +897,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     int vs_arr_size = 3 * 12 * ranges_count * sizeof(Vec3f);
                     int ns_arr_size = 3 * 12 * ranges_count * sizeof(Vec3f);
                     Vec3f *vs = (Vec3f *)memory_arena_alloc(&arena, vs_arr_size + ns_arr_size);
+                    printf("%p\n", vs);
                     Vec3f *ns = vs + (3 * 12 * ranges_count);
                     if (vs)
                     {
