@@ -24,16 +24,20 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ShaderProgram.cpp" />
     <ClCompile Include="Skybox.cpp" />
+    <ClCompile Include="Texture.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="mesh.frag" />
     <None Include="mesh.vert" />
     <None Include="skybox.frag" />
     <None Include="skybox.vert" />
+    <None Include="sun.frag" />
+    <None Include="sun.vert" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ShaderProgram.h" />
     <ClInclude Include="Skybox.h" />
+    <ClInclude Include="Texture.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
