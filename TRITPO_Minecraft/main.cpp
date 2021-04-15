@@ -49,9 +49,14 @@ struct Game_input
             Button enter;
             Button space;
             Button lshift;
+
+            Button n1;
+            Button n2;
+            Button n3;
+            Button n4;
         };
 
-        Button buttons[9];
+        Button buttons[13];
     };
 };
 
@@ -187,10 +192,6 @@ Chunk *world_add_chunk(World *world, Memory_arena *arena, int x, int y, int z)
     return (result);
 }
 
-//unsigned int skyboxVAO, skyboxVBO;
-//ShaderProgram skyboxSP;
-//Skybox skybox;
-
 struct Game_state
 {
     Memory_arena arena;
@@ -207,6 +208,8 @@ struct Game_state
     Vec3f cam_move_dir;
     Vec3f cam_up;
     Vec3f cam_rot;
+
+    uint8_t block_to_place;
 
     World world;
 };
@@ -691,6 +694,8 @@ void game_state_and_memory_init(Game_memory *memory)
     state->cam_move_dir.y = 0.0f;
     state->cam_move_dir.z = state->cam_view_dir.z;
 
+    state->block_to_place = BLOCK_GRASS;
+
     // NOTE(max): call constructors on existing memory
     new (&state->mesh_sp) ShaderProgram("mesh");
     new (&state->skyboxSP) ShaderProgram("skybox");
@@ -766,6 +771,23 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
             state->cam_pos = state->cam_pos + Vec3f(0, -cam_speed, 0);
         }
 
+        if (input->n1.is_pressed)
+        {
+            state->block_to_place = BLOCK_GRASS;
+        }
+        if (input->n2.is_pressed)
+        {
+            state->block_to_place = BLOCK_DIRT;
+        }
+        if (input->n3.is_pressed)
+        {
+            state->block_to_place = BLOCK_STONE;
+        }
+        if (input->n4.is_pressed)
+        {
+            state->block_to_place = BLOCK_SNOW;
+        }
+
         // block removal
         if (input->mleft.is_pressed)
         {
@@ -829,7 +851,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     if (prev_chunk->blocks[block_idx] == BLOCK_AIR)
                     {
                         // TODO(max): assing block type number
-                        prev_chunk->blocks[block_idx] = BLOCK_GRASS;
+                        prev_chunk->blocks[block_idx] = state->block_to_place;
                         prev_chunk->nblocks++;
                         world_push_chunk_for_rebuild(&state->world, prev_chunk);
                     }
@@ -1294,6 +1316,22 @@ int main(void)
         if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
         {
             game_input->lshift.is_pressed = 1;
+        }
+        if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS)
+        {
+            game_input->n1.is_pressed = 1;
+        }
+        if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS)
+        {
+            game_input->n2.is_pressed = 1;
+        }
+        if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS)
+        {
+            game_input->n3.is_pressed = 1;
+        }
+        if (glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS)
+        {
+            game_input->n4.is_pressed = 1;
         }
 
         game_update_and_render(game_input, &game_memory);
