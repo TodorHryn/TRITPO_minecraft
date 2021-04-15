@@ -119,6 +119,14 @@ enum Block_type
 };
 static_assert(BLOCK_TYPE_COUNT < 255, "Block_type has more than 255 block types, this won't fit in uint8_t");
 
+Vec3f Block_colors[BLOCK_TYPE_COUNT] =
+{
+	Vec3f(0, 1, 0),
+	Vec3f(130 / 255.0f, 108 / 255.0f, 47 / 255.0f),
+	Vec3f(0.4f, 0.4f, 0.4f),
+	Vec3f(1, 1, 1)
+};
+
 struct Mesh
 {
     int num_of_vs;
@@ -199,15 +207,17 @@ struct Game_state
 
     ShaderProgram mesh_sp;
 
+	Skybox skybox;
     ShaderProgram skyboxSP;
-    Skybox skybox;
-    GLuint skyboxVAO;
-    GLuint skyboxVBO;
-
 	ShaderProgram sunSP;
+	ShaderProgram inventoryBarSP;
+	ShaderProgram inventoryBlockSP;
 	Texture sunTexture;
-	GLuint sunVAO;
-	GLuint sunVBO;
+	Texture inventoryBarTexture;
+	GLuint cubeVAO;
+    GLuint cubeVBO;
+	GLuint squareVAO;
+	GLuint squareVBO;
 
     Vec3f cam_pos;
     Vec3f cam_view_dir;
@@ -545,58 +555,58 @@ void game_state_and_memory_init(Game_memory *memory)
 
     memory->is_initialized = 1;
 
-    float skyboxVertices[] = {
+    float cubeVertices[] = {
         // positions          
-        -1.0f,  1.0f, -1.0f,
-        -1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-         1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,	 0.0f,  0.0f, -1.0f,
+        -1.0f, -1.0f, -1.0f,	 0.0f,  0.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,	 0.0f,  0.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,	 0.0f,  0.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,	 0.0f,  0.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,	 0.0f,  0.0f, -1.0f,
 
-        -1.0f, -1.0f,  1.0f,
-        -1.0f, -1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f,  1.0f,
-        -1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,	-1.0f,  0.0f,  0.0f,
+        -1.0f, -1.0f, -1.0f,	-1.0f,  0.0f,  0.0f,
+        -1.0f,  1.0f, -1.0f,	-1.0f,  0.0f,  0.0f,
+        -1.0f,  1.0f, -1.0f,	-1.0f,  0.0f,  0.0f,
+        -1.0f,  1.0f,  1.0f,	-1.0f,  0.0f,  0.0f,
+        -1.0f, -1.0f,  1.0f,	-1.0f,  0.0f,  0.0f,
 
-         1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,	 1.0f,  0.0f,  0.0f,
+         1.0f, -1.0f,  1.0f,	 1.0f,  0.0f,  0.0f,
+         1.0f,  1.0f,  1.0f,	 1.0f,  0.0f,  0.0f,
+         1.0f,  1.0f,  1.0f,	 1.0f,  0.0f,  0.0f,
+         1.0f,  1.0f, -1.0f,	 1.0f,  0.0f,  0.0f,
+         1.0f, -1.0f, -1.0f,	 1.0f,  0.0f,  0.0f,
 
-        -1.0f, -1.0f,  1.0f,
-        -1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f, -1.0f,  1.0f,
-        -1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,	 0.0f,  0.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,	 0.0f,  0.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,	 0.0f,  0.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,	 0.0f,  0.0f,  1.0f,
+         1.0f, -1.0f,  1.0f,	 0.0f,  0.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,	 0.0f,  0.0f,  1.0f,
 
-        -1.0f,  1.0f, -1.0f,
-         1.0f,  1.0f, -1.0f,
-         1.0f,  1.0f,  1.0f,
-         1.0f,  1.0f,  1.0f,
-        -1.0f,  1.0f,  1.0f,
-        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,	 0.0f,  1.0f,  0.0f,
+         1.0f,  1.0f, -1.0f,	 0.0f,  1.0f,  0.0f,
+         1.0f,  1.0f,  1.0f,	 0.0f,  1.0f,  0.0f,
+         1.0f,  1.0f,  1.0f,	 0.0f,  1.0f,  0.0f,
+        -1.0f,  1.0f,  1.0f,	 0.0f,  1.0f,  0.0f,
+        -1.0f,  1.0f, -1.0f,	 0.0f,  1.0f,  0.0f,
 
-        -1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f,  1.0f,
-         1.0f, -1.0f, -1.0f,
-         1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f,  1.0f,
-         1.0f, -1.0f,  1.0f
+        -1.0f, -1.0f, -1.0f,	 0.0f, -1.0f,  0.0f,
+        -1.0f, -1.0f,  1.0f,	 0.0f, -1.0f,  0.0f,
+         1.0f, -1.0f, -1.0f,	 0.0f, -1.0f,  0.0f,
+         1.0f, -1.0f, -1.0f,	 0.0f, -1.0f,  0.0f,
+        -1.0f, -1.0f,  1.0f,	 0.0f, -1.0f,  0.0f,
+         1.0f, -1.0f,  1.0f, 	 0.0f, -1.0f,  0.0f
     };
 
-	float sunVertices[] = {
-		-1.0f,  1.0f, 0.0f,
-        -1.0f, -1.0f, 0.0f,
-         1.0f, -1.0f, 0.0f,
-         1.0f, -1.0f, 0.0f,
-         1.0f,  1.0f, 0.0f,
-        -1.0f,  1.0f, 0.0f
+	float squareVertices[] = {
+		-1.0f,  1.0f,  0.0f,
+        -1.0f, -1.0f,  0.0f,
+         1.0f, -1.0f,  0.0f,
+         1.0f, -1.0f,  0.0f,
+         1.0f,  1.0f,  0.0f,
+        -1.0f,  1.0f,  0.0f
 	};
 
     state->arena.curr = (uint8_t *)ALIGN_PTR_UP(&state[1], 8);
@@ -715,25 +725,30 @@ void game_state_and_memory_init(Game_memory *memory)
     new (&state->mesh_sp) ShaderProgram("mesh");
     new (&state->skyboxSP) ShaderProgram("skybox");
 	new (&state->sunSP) ShaderProgram("sun");
-	new (&state->sunTexture) Texture("sun.png", GL_RGBA);
+	new (&state->inventoryBarSP) ShaderProgram("inventoryBar");
+	new (&state->inventoryBlockSP) ShaderProgram("inventoryBlock");
+	new (&state->sunTexture) Texture("Images/sun.png", GL_RGBA);
+	new (&state->inventoryBarTexture) Texture("Images/inventoryBar.png");
     new (&state->skybox) Skybox("Images/cubemap");
 
-    // skybox VAO
-    glGenVertexArrays(1, &state->skyboxVAO);
-    glGenBuffers(1, &state->skyboxVBO);
-    glBindVertexArray(state->skyboxVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, state->skyboxVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+    // Cube VAO (Skybox, inventory blocks)
+    glGenVertexArrays(1, &state->cubeVAO);
+    glGenBuffers(1, &state->cubeVBO);
+    glBindVertexArray(state->cubeVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, state->cubeVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), &cubeVertices, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(1);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*) 0);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*) (3 * sizeof(float)));
     glBindVertexArray(0);
 
-	// sun VAO
-    glGenVertexArrays(1, &state->sunVAO);
-    glGenBuffers(1, &state->sunVBO);
-    glBindVertexArray(state->sunVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, state->sunVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(sunVertices), &sunVertices, GL_STATIC_DRAW);
+	// Square VAO (Sun, inventory bar)
+    glGenVertexArrays(1, &state->squareVAO);
+    glGenBuffers(1, &state->squareVBO);
+    glBindVertexArray(state->squareVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, state->squareVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(squareVertices), &squareVertices, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glBindVertexArray(0);
@@ -1161,6 +1176,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
         glClearColor(0.75f, 0.96f, 0.9f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
+		//World
         state->mesh_sp.use();
 
 		Mat4x4f projection = mat4x4f_perspective(90.0f, input->aspect_ratio, 0.1f, 100.0f);
@@ -1188,14 +1204,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     Mesh *mesh = &c->meshes[m_idx];
                     if (mesh->num_of_vs)
                     {
-                        Vec3f colors[BLOCK_TYPE_COUNT] = {
-                            Vec3f(0, 1, 0),
-                            Vec3f(130 / 255.0f, 108 / 255.0f, 47 / 255.0f),
-                            Vec3f(0.4f, 0.4f, 0.4f),
-                            Vec3f(1, 1, 1),
-                        };
-
-                        Vec3f mesh_color = colors[m_idx];
+                        Vec3f mesh_color = Block_colors[m_idx];
                         glUniform3f(glGetUniformLocation(state->mesh_sp.get(), "u_color"), mesh_color.r, mesh_color.g, mesh_color.b);
                         glBindVertexArray(mesh->vao);
                         glDrawArrays(GL_TRIANGLES, 0, mesh->num_of_vs);
@@ -1226,7 +1235,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		glUniform1f(glGetUniformLocation(state->skyboxSP.get(), "ambientStrength"), ambient * 2);
 		state->skyboxSP.setMatrix4fv("view", glm::mat4(glm::mat3(viewMatrix)));
 		state->skyboxSP.setMatrix4fv("projection", &projection.m[0][0]);
-		glBindVertexArray(state->skyboxVAO);
+		glBindVertexArray(state->cubeVAO);
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, state->skybox.texture());
 		glDrawArrays(GL_TRIANGLES, 0, 36);
@@ -1243,7 +1252,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		glDepthFunc(GL_LEQUAL);
 		glEnable(GL_DEPTH_CLAMP);
 		glDisable(GL_CULL_FACE);
-		glBindVertexArray(state->sunVAO);
+		glBindVertexArray(state->squareVAO);
 		glActiveTexture(GL_TEXTURE0);
 		state->sunTexture.bind();
 		state->sunSP.use();
@@ -1265,6 +1274,52 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		glBindVertexArray(0);
 		glDepthFunc(GL_LESS);
 		glDisable(GL_DEPTH_CLAMP);
+
+		//Inventory
+		glStencilFunc(GL_ALWAYS, 0, 0xFF);
+		glDisable(GL_DEPTH_TEST);
+		glCullFace(GL_FRONT);
+
+		Mat4x4f invBlockProjection = mat4x4f_perspective(45.0f, input->aspect_ratio, 0.1f, 10.0f);
+        Mat4x4f invBlockView = mat4x4f_lookat(Vec3f(5.0f, 5.0f, 5.0f), Vec3f(5.0f, 5.0f, 5.0f) + normalize(Vec3f(-1.0f, -1.0f, -1.0f)), Vec3f(0.0f, 1.0f, 0.0f));
+
+		for (int i = 0; i < BLOCK_TYPE_COUNT; ++i) {
+			float slotSize = (state->block_to_place == i) ? 0.07f : 0.05f;
+			float xPosition = (-static_cast<float>(BLOCK_TYPE_COUNT) / 2 + ((BLOCK_TYPE_COUNT % 2) ? 0 : 0.5) + i) * 0.08f;
+			float yPosition = -1.0f + ((state->block_to_place == i) ? 0.01f + slotSize : 0.03f + slotSize);
+
+			//Bar slot
+			glDisable(GL_CULL_FACE);
+			glActiveTexture(GL_TEXTURE0);
+			glBindVertexArray(state->squareVAO);
+			state->inventoryBarTexture.bind();
+			state->inventoryBarSP.use();
+
+			glm::mat4 model(1);
+			model = glm::translate(model, glm::vec3(xPosition, yPosition, 0.0f));
+			model = glm::scale(model, glm::vec3(slotSize / input->aspect_ratio, slotSize, 1.0f));
+			state->inventoryBarSP.setMatrix4fv("model", model);
+			glDrawArrays(GL_TRIANGLES, 0, 6);
+
+			//Block
+			glEnable(GL_CULL_FACE);
+			glBindVertexArray(state->cubeVAO);
+			state->inventoryBlockSP.use();
+
+			model = glm::translate(glm::mat4(1), glm::vec3(xPosition, yPosition, 0.0f));
+			model = glm::scale(model, glm::vec3(slotSize * 1.2f, slotSize * 1.2f, 1.0f));
+
+			Vec3f color = Block_colors[i];
+			state->inventoryBlockSP.setMatrix4fv("u_model", model);
+			state->inventoryBlockSP.setMatrix4fv("u_view", &invBlockView.m[0][0]);
+			state->inventoryBlockSP.setMatrix4fv("u_projection", &invBlockProjection.m[0][0]);
+			glUniform3f(glGetUniformLocation(state->inventoryBlockSP.get(), "u_color"), color.r, color.g, color.b);
+			glDrawArrays(GL_TRIANGLES, 0, 36);
+			glBindVertexArray(0);
+		}
+
+		glEnable(GL_DEPTH_TEST);
+		glBindVertexArray(0);
     }
 }
 
