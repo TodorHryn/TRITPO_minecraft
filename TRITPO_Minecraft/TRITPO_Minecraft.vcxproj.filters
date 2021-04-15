@@ -26,26 +26,26 @@
     <ClCompile Include="3DMath.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="Texture.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="skybox.frag">
-      <Filter>Исходные файлы</Filter>
-    </None>
-    <None Include="skybox.vert">
-      <Filter>Исходные файлы</Filter>
-    </None>
-    <None Include="mesh.vert">
-      <Filter>Исходные файлы</Filter>
-    </None>
-    <None Include="mesh.frag">
-      <Filter>Исходные файлы</Filter>
-    </None>
+    <None Include="mesh.frag" />
+    <None Include="mesh.vert" />
+    <None Include="skybox.frag" />
+    <None Include="skybox.vert" />
+    <None Include="sun.vert" />
+    <None Include="sun.frag" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Skybox.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="ShaderProgram.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Texture.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

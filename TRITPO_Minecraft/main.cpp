@@ -12,6 +12,7 @@
 #include "glm\gtc\type_ptr.hpp"
 #include "ShaderProgram.h"
 #include "Skybox.h"
+#include "Texture.h"
 
 #include "3DMath.h"
 
@@ -202,6 +203,11 @@ struct Game_state
     Skybox skybox;
     GLuint skyboxVAO;
     GLuint skyboxVBO;
+
+	ShaderProgram sunSP;
+	Texture sunTexture;
+	GLuint sunVAO;
+	GLuint sunVBO;
 
     Vec3f cam_pos;
     Vec3f cam_view_dir;
@@ -584,6 +590,15 @@ void game_state_and_memory_init(Game_memory *memory)
          1.0f, -1.0f,  1.0f
     };
 
+	float sunVertices[] = {
+		-1.0f,  1.0f, 0.0f,
+        -1.0f, -1.0f, 0.0f,
+         1.0f, -1.0f, 0.0f,
+         1.0f, -1.0f, 0.0f,
+         1.0f,  1.0f, 0.0f,
+        -1.0f,  1.0f, 0.0f
+	};
+
     state->arena.curr = (uint8_t *)ALIGN_PTR_UP(&state[1], 8);
     state->arena.end = (uint8_t *)memory->permanent_mem + memory->permanent_mem_size;
 
@@ -699,6 +714,8 @@ void game_state_and_memory_init(Game_memory *memory)
     // NOTE(max): call constructors on existing memory
     new (&state->mesh_sp) ShaderProgram("mesh");
     new (&state->skyboxSP) ShaderProgram("skybox");
+	new (&state->sunSP) ShaderProgram("sun");
+	new (&state->sunTexture) Texture("sun.png", GL_RGBA);
     new (&state->skybox) Skybox("Images/cubemap");
 
     // skybox VAO
@@ -707,6 +724,16 @@ void game_state_and_memory_init(Game_memory *memory)
     glBindVertexArray(state->skyboxVAO);
     glBindBuffer(GL_ARRAY_BUFFER, state->skyboxVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glBindVertexArray(0);
+
+	// sun VAO
+    glGenVertexArrays(1, &state->sunVAO);
+    glGenBuffers(1, &state->sunVBO);
+    glBindVertexArray(state->sunVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, state->sunVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(sunVertices), &sunVertices, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glBindVertexArray(0);
@@ -1126,9 +1153,13 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
         glCullFace(GL_BACK);
         //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
+		glEnable(GL_STENCIL_TEST);
+		glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
+		glStencilFunc(GL_ALWAYS, 1, 0xFF);
+
 		glEnable(GL_DEPTH_TEST);
         glClearColor(0.75f, 0.96f, 0.9f, 1);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
         state->mesh_sp.use();
 
@@ -1177,6 +1208,10 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 
 		float ambient = 0.5f; //TODO
 
+		glClear(GL_DEPTH_BUFFER_BIT);
+		glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+		glStencilFunc(GL_EQUAL, 0, 0xFF);
+
 		//Skybox
 		glm::mat4 viewMatrix;
 
@@ -1195,6 +1230,38 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, state->skybox.texture());
 		glDrawArrays(GL_TRIANGLES, 0, 36);
+		glBindVertexArray(0);
+		glDepthFunc(GL_LESS);
+		glDisable(GL_DEPTH_CLAMP);
+
+		//Sun
+		glm::vec3 sunPosition(20 * sin(-20 + glfwGetTime() * 0.1), 20 * sin(glfwGetTime() * 0.1), 20 * cos(0.002 - 20 + glfwGetTime() * 0.1));
+		
+		glEnable(GL_BLEND);
+		glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+		glDepthFunc(GL_LEQUAL);
+		glEnable(GL_DEPTH_CLAMP);
+		glDisable(GL_CULL_FACE);
+		glBindVertexArray(state->sunVAO);
+		glActiveTexture(GL_TEXTURE0);
+		state->sunTexture.bind();
+		state->sunSP.use();
+
+		glm::mat4 model(1);
+		model = glm::translate(model, sunPosition + glm::vec3(state->cam_pos.x, state->cam_pos.y, state->cam_pos.z));
+		glm::vec3 sunPositionProjection(sunPosition.x, sunPosition.y, 0);
+		float angle = 3.14 / 2 - acos(glm::dot(glm::normalize(sunPosition), glm::normalize(sunPositionProjection)));
+		glm::vec3 sunRotationAxis = glm::cross(sunPosition, sunPositionProjection);
+		model = glm::rotate(model, angle, sunRotationAxis);
+		model = glm::scale(model, glm::vec3(5.0f, 5.0f, 5.0f));
+
+		state->sunSP.setMatrix4fv("model", model);
+		state->sunSP.setMatrix4fv("view", &view.m[0][0]);
+		state->sunSP.setMatrix4fv("projection", &projection.m[0][0]);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+		
+		glBindTexture(GL_TEXTURE_2D, 0);
 		glBindVertexArray(0);
 		glDepthFunc(GL_LESS);
 		glDisable(GL_DEPTH_CLAMP);
