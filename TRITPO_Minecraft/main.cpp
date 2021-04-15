@@ -210,10 +210,10 @@ struct Game_state
 	Skybox skybox;
     ShaderProgram skyboxSP;
 	ShaderProgram sunSP;
-	ShaderProgram inventorySP;
+	ShaderProgram inventoryBarSP;
 	ShaderProgram inventoryBlockSP;
 	Texture sunTexture;
-	Texture inventoryTexture;
+	Texture inventoryBarTexture;
 	GLuint cubeVAO;
     GLuint cubeVBO;
 	GLuint squareVAO;
@@ -725,10 +725,10 @@ void game_state_and_memory_init(Game_memory *memory)
     new (&state->mesh_sp) ShaderProgram("mesh");
     new (&state->skyboxSP) ShaderProgram("skybox");
 	new (&state->sunSP) ShaderProgram("sun");
-	new (&state->inventorySP) ShaderProgram("inventory");
+	new (&state->inventoryBarSP) ShaderProgram("inventoryBar");
 	new (&state->inventoryBlockSP) ShaderProgram("inventoryBlock");
 	new (&state->sunTexture) Texture("sun.png", GL_RGBA);
-	new (&state->inventoryTexture) Texture("inventory.png");
+	new (&state->inventoryBarTexture) Texture("inventoryBar.png");
     new (&state->skybox) Skybox("Images/cubemap");
 
     // Cube VAO (Skybox, inventory blocks)
@@ -1292,13 +1292,13 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 			glDisable(GL_CULL_FACE);
 			glActiveTexture(GL_TEXTURE0);
 			glBindVertexArray(state->squareVAO);
-			state->inventoryTexture.bind();
-			state->inventorySP.use();
+			state->inventoryBarTexture.bind();
+			state->inventoryBarSP.use();
 
-			glm::mat4 inventoryModel(1);
-			inventoryModel = glm::translate(inventoryModel, glm::vec3(xPosition, yPosition, 0.0f));
-			inventoryModel = glm::scale(inventoryModel, glm::vec3(slotSize / input->aspect_ratio, slotSize, 1.0f));
-			state->inventorySP.setMatrix4fv("model", inventoryModel);
+			glm::mat4 model(1);
+			model = glm::translate(model, glm::vec3(xPosition, yPosition, 0.0f));
+			model = glm::scale(model, glm::vec3(slotSize / input->aspect_ratio, slotSize, 1.0f));
+			state->inventoryBarSP.setMatrix4fv("model", model);
 			glDrawArrays(GL_TRIANGLES, 0, 6);
 
 			//Block
@@ -1306,11 +1306,11 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 			glBindVertexArray(state->cubeVAO);
 			state->inventoryBlockSP.use();
 
-			inventoryModel = glm::translate(glm::mat4(1), glm::vec3(xPosition, yPosition, 0.0f));
-			inventoryModel = glm::scale(inventoryModel, glm::vec3(slotSize * 1.2f, slotSize * 1.2f, 1.0f));
+			model = glm::translate(glm::mat4(1), glm::vec3(xPosition, yPosition, 0.0f));
+			model = glm::scale(model, glm::vec3(slotSize * 1.2f, slotSize * 1.2f, 1.0f));
 
 			Vec3f color = Block_colors[i];
-			state->inventoryBlockSP.setMatrix4fv("u_model", inventoryModel);
+			state->inventoryBlockSP.setMatrix4fv("u_model", model);
 			state->inventoryBlockSP.setMatrix4fv("u_view", &invBlockView.m[0][0]);
 			state->inventoryBlockSP.setMatrix4fv("u_projection", &invBlockProjection.m[0][0]);
 			glUniform3f(glGetUniformLocation(state->inventoryBlockSP.get(), "u_color"), color.r, color.g, color.b);
