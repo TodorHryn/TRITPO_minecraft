@@ -39,6 +39,8 @@
     <None Include="sun.frag" />
     <None Include="inventory.vert" />
     <None Include="inventory.frag" />
+    <None Include="inventoryBlock.frag" />
+    <None Include="inventoryBlock.vert" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Skybox.h">

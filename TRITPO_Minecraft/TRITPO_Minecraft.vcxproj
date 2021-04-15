@@ -29,6 +29,8 @@
   <ItemGroup>
     <None Include="inventory.frag" />
     <None Include="inventory.vert" />
+    <None Include="inventoryBlock.frag" />
+    <None Include="inventoryBlock.vert" />
     <None Include="mesh.frag" />
     <None Include="mesh.vert" />
     <None Include="skybox.frag" />
