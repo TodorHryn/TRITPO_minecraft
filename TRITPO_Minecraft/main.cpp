@@ -727,8 +727,8 @@ void game_state_and_memory_init(Game_memory *memory)
 	new (&state->sunSP) ShaderProgram("sun");
 	new (&state->inventoryBarSP) ShaderProgram("inventoryBar");
 	new (&state->inventoryBlockSP) ShaderProgram("inventoryBlock");
-	new (&state->sunTexture) Texture("sun.png", GL_RGBA);
-	new (&state->inventoryBarTexture) Texture("inventoryBar.png");
+	new (&state->sunTexture) Texture("Images/sun.png", GL_RGBA);
+	new (&state->inventoryBarTexture) Texture("Images/inventoryBar.png");
     new (&state->skybox) Skybox("Images/cubemap");
 
     // Cube VAO (Skybox, inventory blocks)
