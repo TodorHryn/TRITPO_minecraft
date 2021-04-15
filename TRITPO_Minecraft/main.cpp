@@ -199,15 +199,16 @@ struct Game_state
 
     ShaderProgram mesh_sp;
 
+	Skybox skybox;
     ShaderProgram skyboxSP;
-    Skybox skybox;
-    GLuint skyboxVAO;
-    GLuint skyboxVBO;
-
 	ShaderProgram sunSP;
+	ShaderProgram inventorySP;
 	Texture sunTexture;
-	GLuint sunVAO;
-	GLuint sunVBO;
+	Texture inventoryTexture;
+	GLuint skyboxVAO;
+    GLuint skyboxVBO;
+	GLuint squareVAO;
+	GLuint squareVBO;
 
     Vec3f cam_pos;
     Vec3f cam_view_dir;
@@ -545,7 +546,7 @@ void game_state_and_memory_init(Game_memory *memory)
 
     memory->is_initialized = 1;
 
-    float skyboxVertices[] = {
+    float cubeVertices[] = {
         // positions          
         -1.0f,  1.0f, -1.0f,
         -1.0f, -1.0f, -1.0f,
@@ -590,7 +591,7 @@ void game_state_and_memory_init(Game_memory *memory)
          1.0f, -1.0f,  1.0f
     };
 
-	float sunVertices[] = {
+	float squareVertices[] = {
 		-1.0f,  1.0f, 0.0f,
         -1.0f, -1.0f, 0.0f,
          1.0f, -1.0f, 0.0f,
@@ -715,7 +716,9 @@ void game_state_and_memory_init(Game_memory *memory)
     new (&state->mesh_sp) ShaderProgram("mesh");
     new (&state->skyboxSP) ShaderProgram("skybox");
 	new (&state->sunSP) ShaderProgram("sun");
+	new (&state->inventorySP) ShaderProgram("inventory");
 	new (&state->sunTexture) Texture("sun.png", GL_RGBA);
+	new (&state->inventoryTexture) Texture("inventory.png");
     new (&state->skybox) Skybox("Images/cubemap");
 
     // skybox VAO
@@ -723,17 +726,17 @@ void game_state_and_memory_init(Game_memory *memory)
     glGenBuffers(1, &state->skyboxVBO);
     glBindVertexArray(state->skyboxVAO);
     glBindBuffer(GL_ARRAY_BUFFER, state->skyboxVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), &cubeVertices, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glBindVertexArray(0);
 
-	// sun VAO
-    glGenVertexArrays(1, &state->sunVAO);
-    glGenBuffers(1, &state->sunVBO);
-    glBindVertexArray(state->sunVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, state->sunVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(sunVertices), &sunVertices, GL_STATIC_DRAW);
+	// Square VAO
+    glGenVertexArrays(1, &state->squareVAO);
+    glGenBuffers(1, &state->squareVBO);
+    glBindVertexArray(state->squareVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, state->squareVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(squareVertices), &squareVertices, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glBindVertexArray(0);
@@ -1161,6 +1164,27 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
         glClearColor(0.75f, 0.96f, 0.9f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
+		//Inventory
+		glActiveTexture(GL_TEXTURE0);
+		glBindVertexArray(state->squareVAO);
+		state->inventoryTexture.bind();
+		state->inventorySP.use();
+
+		for (int i = 0; i < BLOCK_TYPE_COUNT; ++i) {
+			float slotSize = (state->block_to_place == i) ? 0.07f : 0.05f;
+			float xPosition = (-static_cast<float>(BLOCK_TYPE_COUNT) / 2 + ((BLOCK_TYPE_COUNT % 2) ? 0 : 0.5) + i) * 0.08f;
+			float yPosition = -1.0f + ((state->block_to_place == i) ? 0.01f + slotSize : 0.03f + slotSize);
+
+			glm::mat4 inventoryModel(1);
+			inventoryModel = glm::translate(inventoryModel, glm::vec3(xPosition, yPosition, 0.0f));
+			inventoryModel = glm::scale(inventoryModel, glm::vec3(slotSize / input->aspect_ratio, slotSize, 1.0f));
+			state->inventorySP.setMatrix4fv("model", inventoryModel);
+			glDrawArrays(GL_TRIANGLES, 0, 6);
+		}
+
+		glBindVertexArray(0);
+
+		//World
         state->mesh_sp.use();
 
 		Mat4x4f projection = mat4x4f_perspective(90.0f, input->aspect_ratio, 0.1f, 100.0f);
@@ -1243,7 +1267,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		glDepthFunc(GL_LEQUAL);
 		glEnable(GL_DEPTH_CLAMP);
 		glDisable(GL_CULL_FACE);
-		glBindVertexArray(state->sunVAO);
+		glBindVertexArray(state->squareVAO);
 		glActiveTexture(GL_TEXTURE0);
 		state->sunTexture.bind();
 		state->sunSP.use();
