@@ -29,6 +29,9 @@
     <ClCompile Include="Texture.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="ShadowMap.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="mesh.frag" />
@@ -41,6 +44,8 @@
     <None Include="inventoryBlock.vert" />
     <None Include="inventoryBar.vert" />
     <None Include="inventoryBar.frag" />
+    <None Include="meshShadowMap.frag" />
+    <None Include="meshShadowMap.vert" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Skybox.h">
@@ -50,6 +55,9 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="Texture.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="ShadowMap.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

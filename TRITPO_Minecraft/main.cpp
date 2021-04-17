@@ -14,7 +14,7 @@
 #include "ShaderProgram.h"
 #include "Skybox.h"
 #include "Texture.h"
-
+#include "ShadowMap.h"
 #include "3DMath.h"
 
 #define MEMORY_KB(x) ((x) * 1024ull)
@@ -206,13 +206,17 @@ struct Game_state
 {
     Memory_arena arena;
 
-    ShaderProgram mesh_sp;
-
 	Skybox skybox;
     ShaderProgram skyboxSP;
 	ShaderProgram sunSP;
 	ShaderProgram inventoryBarSP;
 	ShaderProgram inventoryBlockSP;
+	ShaderProgram mesh_sp;
+	ShaderProgram meshShadowMapSP;
+	ShadowMap shadowMap1;
+	ShadowMap shadowMap2;
+	ShadowMap shadowMap3;
+	ShadowMap shadowMap4;
 	Texture sunTexture;
 	Texture inventoryBarTexture;
 	GLuint cubeVAO;
@@ -728,6 +732,11 @@ void game_state_and_memory_init(Game_memory *memory)
 	new (&state->sunSP) ShaderProgram("sun");
 	new (&state->inventoryBarSP) ShaderProgram("inventoryBar");
 	new (&state->inventoryBlockSP) ShaderProgram("inventoryBlock");
+	new (&state->meshShadowMapSP) ShaderProgram("meshShadowMap");
+	new (&state->shadowMap1) ShadowMap(2048, 2048);
+	new (&state->shadowMap2) ShadowMap(2048, 2048);
+	new (&state->shadowMap3) ShadowMap(2048, 2048);
+	new (&state->shadowMap4) ShadowMap(2048, 2048);
 	new (&state->sunTexture) Texture("Images/sun.png", GL_RGBA);
 	new (&state->inventoryBarTexture) Texture("Images/inventoryBar.png");
     new (&state->skybox) Skybox("Images/cubemap");
@@ -755,7 +764,7 @@ void game_state_and_memory_init(Game_memory *memory)
     glBindVertexArray(0);
 }
 
-void renderWorld(Game_state *state) {
+void renderWorld(Game_state *state, ShaderProgram &sp) {
 	Chunk *c = state->world.next;
 	while (c != 0)
 	{
@@ -768,7 +777,7 @@ void renderWorld(Game_state *state) {
 
 			Mat4x4f model = mat4x4f_identity();
 			model = mat4x4f_translate(model, chunk_offset);
-			state->mesh_sp.setMatrix4fv("u_model", &model.m[0][0]);
+			sp.setMatrix4fv("u_model", &model.m[0][0]);
 
 			for (int m_idx = 0; m_idx < BLOCK_TYPE_COUNT; m_idx++)
 			{
@@ -776,7 +785,7 @@ void renderWorld(Game_state *state) {
 				if (mesh->num_of_vs)
 				{
 					Vec3f mesh_color = Block_colors[m_idx];
-					glUniform3f(glGetUniformLocation(state->mesh_sp.get(), "u_color"), mesh_color.r, mesh_color.g, mesh_color.b);
+					glUniform3f(glGetUniformLocation(sp.get(), "u_color"), mesh_color.r, mesh_color.g, mesh_color.b);
 					glBindVertexArray(mesh->vao);
 					glDrawArrays(GL_TRIANGLES, 0, mesh->num_of_vs);
 					glBindVertexArray(0);
@@ -1209,23 +1218,75 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
         glClearColor(0.75f, 0.96f, 0.9f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-		glm::vec3 sunPosition(20 * sin(-20 + glfwGetTime() * 0.1), 20 * sin(glfwGetTime() * 0.1), 20 * cos(0.002 - 20 + glfwGetTime() * 0.1));
+		glm::vec3 sunPosition(20 * sin(-20 + glfwGetTime() * 0.1), 20 * cos(0.002 - 20 + glfwGetTime() * 0.1), 20 * sin(glfwGetTime() * 0.1));
 		float sunHeight = glm::dot(glm::normalize(sunPosition), glm::vec3(0.0f, 1.0f, 0.0f));
 		float ambient = std::max(sunHeight / 2, 0.3f);
+
+		//Shadow maps
+		glm::vec3 cameraPos(state->cam_pos.x, state->cam_pos.y, state->cam_pos.z);
+		glm::mat4 lightView = glm::lookAt(sunPosition + cameraPos, cameraPos, glm::vec3(0.0f, 1.0f, 0.0f));
+		glm::mat4 lightProjection1 = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 1.0f, 200.0f);
+		glm::mat4 lightProjection2 = glm::ortho(-20.0f, 20.0f, -20.0f, 20.0f, 1.0f, 200.0f);
+		glm::mat4 lightProjection3 = glm::ortho(-40.0f, 40.0f, -40.0f, 40.0f, 1.0f, 200.0f);
+		glm::mat4 lightProjection4 = glm::ortho(-80.0f, 80.0f, -80.0f, 80.0f, 1.0f, 200.0f);
+		glm::mat4 lightProjectionViewMatrix1 = lightProjection1 * lightView;
+		glm::mat4 lightProjectionViewMatrix2 = lightProjection2 * lightView;
+		glm::mat4 lightProjectionViewMatrix3 = lightProjection3 * lightView;
+		glm::mat4 lightProjectionViewMatrix4 = lightProjection4 * lightView;
+
+		state->meshShadowMapSP.use();
+
+		state->shadowMap1.bind();
+		state->meshShadowMapSP.setMatrix4fv("u_projection_view", lightProjectionViewMatrix1);
+		renderWorld(state, state->meshShadowMapSP);
+		state->shadowMap1.unbind();
+
+		state->shadowMap2.bind();
+		state->meshShadowMapSP.setMatrix4fv("u_projection_view", lightProjectionViewMatrix2);
+		renderWorld(state, state->meshShadowMapSP);
+		state->shadowMap2.unbind();
+
+		state->shadowMap3.bind();
+		state->meshShadowMapSP.setMatrix4fv("u_projection_view", lightProjectionViewMatrix3);
+		renderWorld(state, state->meshShadowMapSP);
+		state->shadowMap3.unbind();
+
+		state->shadowMap4.bind();
+		state->meshShadowMapSP.setMatrix4fv("u_projection_view", lightProjectionViewMatrix4);
+		renderWorld(state, state->meshShadowMapSP);
+		state->shadowMap4.unbind();
 
 		//World
         state->mesh_sp.use();
 
 		Mat4x4f projection = mat4x4f_perspective(90.0f, input->aspect_ratio, 0.1f, 100.0f);
         state->mesh_sp.setMatrix4fv("u_projection", &projection.m[0][0]);
-
+		
 		Mat4x4f view = mat4x4f_lookat(state->cam_pos, state->cam_pos + state->cam_view_dir, state->cam_up);
 		state->mesh_sp.setMatrix4fv("u_view", &view.m[0][0]);
-
+		
 		state->mesh_sp.set3fv("light_pos", sunPosition);
 		state->mesh_sp.set1f("ambient_factor", ambient);
 
-		renderWorld(state);
+		glActiveTexture(GL_TEXTURE2);
+		glBindTexture(GL_TEXTURE_2D, state->shadowMap1.get());
+		glActiveTexture(GL_TEXTURE3);
+		glBindTexture(GL_TEXTURE_2D, state->shadowMap2.get());
+		glActiveTexture(GL_TEXTURE4);
+		glBindTexture(GL_TEXTURE_2D, state->shadowMap3.get());
+		glActiveTexture(GL_TEXTURE5);
+		glBindTexture(GL_TEXTURE_2D, state->shadowMap4.get());
+		glUniform1i(glGetUniformLocation(state->mesh_sp.get(), "depthMap1"), 2);
+		glUniform1i(glGetUniformLocation(state->mesh_sp.get(), "depthMap2"), 3);
+		glUniform1i(glGetUniformLocation(state->mesh_sp.get(), "depthMap3"), 4);
+		glUniform1i(glGetUniformLocation(state->mesh_sp.get(), "depthMap4"), 5);
+		state->mesh_sp.setMatrix4fv("lightSpaceMatrix1", lightProjectionViewMatrix1);
+		state->mesh_sp.setMatrix4fv("lightSpaceMatrix2", lightProjectionViewMatrix2);
+		state->mesh_sp.setMatrix4fv("lightSpaceMatrix3", lightProjectionViewMatrix3);
+		state->mesh_sp.setMatrix4fv("lightSpaceMatrix4", lightProjectionViewMatrix4);
+		glUniform1f(glGetUniformLocation(state->mesh_sp.get(), "shadowStrength"), (sunHeight > 0.5f ? 1.0f : std::max(sunHeight * 2.0f, 0.0f)));
+
+		renderWorld(state, state->mesh_sp);
 
 		glClear(GL_DEPTH_BUFFER_BIT);
 		glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
