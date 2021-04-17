@@ -1,6 +1,7 @@
 #include <stdio.h> // sprintf
 #include <assert.h>
 #include <iostream>
+#include <algorithm>
 
 #include "glad\glad.h"
 #include "GLFW\glfw3.h"
@@ -754,6 +755,38 @@ void game_state_and_memory_init(Game_memory *memory)
     glBindVertexArray(0);
 }
 
+void renderWorld(Game_state *state) {
+	Chunk *c = state->world.next;
+	while (c != 0)
+	{
+		if (c->nblocks)
+		{
+			Vec3f chunk_offset(
+				(float)(c->x * CHUNK_DIM),
+				(float)(c->y * CHUNK_DIM),
+				(float)(c->z * CHUNK_DIM));
+
+			Mat4x4f model = mat4x4f_identity();
+			model = mat4x4f_translate(model, chunk_offset);
+			state->mesh_sp.setMatrix4fv("u_model", &model.m[0][0]);
+
+			for (int m_idx = 0; m_idx < BLOCK_TYPE_COUNT; m_idx++)
+			{
+				Mesh *mesh = &c->meshes[m_idx];
+				if (mesh->num_of_vs)
+				{
+					Vec3f mesh_color = Block_colors[m_idx];
+					glUniform3f(glGetUniformLocation(state->mesh_sp.get(), "u_color"), mesh_color.r, mesh_color.g, mesh_color.b);
+					glBindVertexArray(mesh->vao);
+					glDrawArrays(GL_TRIANGLES, 0, mesh->num_of_vs);
+					glBindVertexArray(0);
+				}
+			}
+		}
+		c = c->next;
+	}
+}
+
 void game_update_and_render(Game_input *input, Game_memory *memory)
 {
     assert(memory->is_initialized);
@@ -1176,46 +1209,23 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
         glClearColor(0.75f, 0.96f, 0.9f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
+		glm::vec3 sunPosition(20 * sin(-20 + glfwGetTime() * 0.1), 20 * sin(glfwGetTime() * 0.1), 20 * cos(0.002 - 20 + glfwGetTime() * 0.1));
+		float sunHeight = glm::dot(glm::normalize(sunPosition), glm::vec3(0.0f, 1.0f, 0.0f));
+		float ambient = std::max(sunHeight / 2, 0.3f);
+
 		//World
         state->mesh_sp.use();
 
 		Mat4x4f projection = mat4x4f_perspective(90.0f, input->aspect_ratio, 0.1f, 100.0f);
         state->mesh_sp.setMatrix4fv("u_projection", &projection.m[0][0]);
 
-        Mat4x4f view = mat4x4f_lookat(state->cam_pos, state->cam_pos + state->cam_view_dir, state->cam_up);
-        state->mesh_sp.setMatrix4fv("u_view", &view.m[0][0]);
+		Mat4x4f view = mat4x4f_lookat(state->cam_pos, state->cam_pos + state->cam_view_dir, state->cam_up);
+		state->mesh_sp.setMatrix4fv("u_view", &view.m[0][0]);
 
-        Chunk *c = state->world.next;
-        while (c != 0)
-        {
-            if (c->nblocks)
-            {
-                Vec3f chunk_offset(
-                    (float)(c->x * CHUNK_DIM),
-                    (float)(c->y * CHUNK_DIM),
-                    (float)(c->z * CHUNK_DIM));
+		state->mesh_sp.set3fv("light_pos", sunPosition);
+		state->mesh_sp.set1f("ambient_factor", ambient);
 
-                Mat4x4f model = mat4x4f_identity();
-                model = mat4x4f_translate(model, chunk_offset);
-                state->mesh_sp.setMatrix4fv("u_model", &model.m[0][0]);
-
-                for (int m_idx = 0; m_idx < BLOCK_TYPE_COUNT; m_idx++)
-                {
-                    Mesh *mesh = &c->meshes[m_idx];
-                    if (mesh->num_of_vs)
-                    {
-                        Vec3f mesh_color = Block_colors[m_idx];
-                        glUniform3f(glGetUniformLocation(state->mesh_sp.get(), "u_color"), mesh_color.r, mesh_color.g, mesh_color.b);
-                        glBindVertexArray(mesh->vao);
-                        glDrawArrays(GL_TRIANGLES, 0, mesh->num_of_vs);
-                        glBindVertexArray(0);
-                    }
-                }
-            }
-            c = c->next;
-        }
-
-		float ambient = 0.5f; //TODO
+		renderWorld(state);
 
 		glClear(GL_DEPTH_BUFFER_BIT);
 		glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
@@ -1244,8 +1254,6 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		glDisable(GL_DEPTH_CLAMP);
 
 		//Sun
-		glm::vec3 sunPosition(20 * sin(-20 + glfwGetTime() * 0.1), 20 * sin(glfwGetTime() * 0.1), 20 * cos(0.002 - 20 + glfwGetTime() * 0.1));
-		
 		glEnable(GL_BLEND);
 		glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
