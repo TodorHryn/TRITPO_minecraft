@@ -82,6 +82,14 @@ GLuint ShaderProgram::get() {
 	return m_shaderProgram;
 }
 
+void ShaderProgram::set1f(std::string name, float value) {
+	glUniform1f(glGetUniformLocation(m_shaderProgram, name.c_str()), value);
+}
+
+void ShaderProgram::set3fv(std::string name, const glm::vec3 &vector) {
+	glUniform3fv(glGetUniformLocation(m_shaderProgram, name.c_str()), 1, glm::value_ptr(vector));
+}
+
 void ShaderProgram::setMatrix4fv(std::string name, const glm::mat4 &matrix) {
 	glUniformMatrix4fv(glGetUniformLocation(m_shaderProgram, name.c_str()), 1, GL_FALSE, glm::value_ptr(matrix));
 }
