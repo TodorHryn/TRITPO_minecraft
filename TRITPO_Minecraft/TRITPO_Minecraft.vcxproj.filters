@@ -42,10 +42,10 @@
     <None Include="sun.frag" />
     <None Include="inventoryBlock.frag" />
     <None Include="inventoryBlock.vert" />
-    <None Include="inventoryBar.vert" />
-    <None Include="inventoryBar.frag" />
     <None Include="meshShadowMap.frag" />
     <None Include="meshShadowMap.vert" />
+    <None Include="image.frag" />
+    <None Include="image.vert" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Skybox.h">

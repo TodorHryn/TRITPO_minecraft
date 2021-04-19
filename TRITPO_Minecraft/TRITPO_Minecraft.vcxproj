@@ -28,8 +28,8 @@
     <ClCompile Include="Texture.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="inventoryBar.frag" />
-    <None Include="inventoryBar.vert" />
+    <None Include="image.frag" />
+    <None Include="image.vert" />
     <None Include="inventoryBlock.frag" />
     <None Include="inventoryBlock.vert" />
     <None Include="mesh.frag" />
