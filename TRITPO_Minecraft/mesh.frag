@@ -13,11 +13,12 @@ out vec4 frag_color;
 
 uniform vec3 light_pos;
 uniform float ambient_factor;
+uniform float diffuse_strength;
+uniform float shadowStrength;
 uniform sampler2D depthMap1;
 uniform sampler2D depthMap2;
 uniform sampler2D depthMap3;
 uniform sampler2D depthMap4;
-uniform float shadowStrength;
 
 bool isInShadowMap(vec4 posLightSpace) {
 	vec3 projCoords = posLightSpace.xyz / posLightSpace.w;
@@ -52,7 +53,7 @@ float getShadow(vec4 posLightSpace, sampler2D depthMap) {
 
 void main() {
     vec3 light_col = vec3(1, 1, 1);
-	float diffuse_factor = max(0.0f, dot(normal, normalize(light_pos)));
+	float diffuse_factor = clamp(dot(normal, normalize(light_pos)), 0.0f, 1.0f);
 	float shadow;
 	
 	if (isInShadowMap(posLightSpace1))
@@ -64,7 +65,7 @@ void main() {
 	else
 		shadow = getShadow(posLightSpace4, depthMap4);
 
-	vec3 light = light_col * clamp(ambient_factor + diffuse_factor * (1 - shadow), 0.0f, 1.0f);
+	vec3 light = light_col * clamp(ambient_factor + diffuse_factor * diffuse_strength * (1 - shadow), 0.0f, 1.0f);
 
     frag_color = vec4(u_color * light, 1.0f);
 }

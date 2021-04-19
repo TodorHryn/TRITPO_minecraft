@@ -1269,6 +1269,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		
 		state->mesh_sp.set3fv("light_pos", sunPosition);
 		state->mesh_sp.set1f("ambient_factor", ambient);
+		state->mesh_sp.set1f("diffuse_strength", (sunPosition.y > 0.0f) ? 1.0f : 0.2f);
 
 		glActiveTexture(GL_TEXTURE2);
 		glBindTexture(GL_TEXTURE_2D, state->shadowMap1.get());
@@ -1287,6 +1288,19 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		state->mesh_sp.setMatrix4fv("lightSpaceMatrix3", lightProjectionViewMatrix3);
 		state->mesh_sp.setMatrix4fv("lightSpaceMatrix4", lightProjectionViewMatrix4);
 		glUniform1f(glGetUniformLocation(state->mesh_sp.get(), "shadowStrength"), (sunHeight > 0.5f ? 1.0f : std::max(sunHeight * 2.0f, 0.0f)));
+
+		if (sunHeight > 0.2f)
+			state->mesh_sp.set1f("diffuse_strength", 1.0f);
+		else if (sunHeight > 0.0f)
+			state->mesh_sp.set1f("diffuse_strength", sunHeight * 5);
+		else if (sunHeight > -0.2f) {
+			state->mesh_sp.set1f("diffuse_strength", abs(sunHeight / 2));
+			state->mesh_sp.set3fv("light_pos", -sunPosition);
+		}
+		else {
+			state->mesh_sp.set1f("diffuse_strength", 0.1f);
+			state->mesh_sp.set3fv("light_pos", -sunPosition);
+		}
 
 		renderWorld(state, state->mesh_sp);
 
