@@ -47,7 +47,7 @@ float getShadow(vec4 posLightSpace, sampler2D depthMap) {
 		shadow += currentDepth - 0.001 > depth ? 1.0 : 0.0;
 	}
 
-	return shadow;
+	return shadow * shadowStrength;
 }
 
 void main() {
@@ -64,7 +64,7 @@ void main() {
 	else
 		shadow = getShadow(posLightSpace4, depthMap4);
 
-	vec3 light = light_col * clamp(ambient_factor + diffuse_factor * (1 - shadow) * shadowStrength, 0.0f, 1.0f);
+	vec3 light = light_col * clamp(ambient_factor + diffuse_factor * (1 - shadow), 0.0f, 1.0f);
 
     frag_color = vec4(u_color * light, 1.0f);
 }
