@@ -265,7 +265,7 @@ Raycast_result raycast(World *world, Vec3f pos, Vec3f view_dir)
     float start_y = pos.y;
     float start_z = pos.z;
 
-    float max_ray_len = 3.0f;
+    float max_ray_len = 10.0f;
     Vec3f end_point = pos + max_ray_len * view_dir;
     float end_x = end_point.x;
     float end_y = end_point.y;
@@ -1210,7 +1210,6 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
     {
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
-        //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
 		glEnable(GL_STENCIL_TEST);
 		glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
@@ -1303,6 +1302,25 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		}
 
 		renderWorld(state, state->mesh_sp);
+
+
+		Raycast_result rc = raycast(&state->world, state->cam_pos, state->cam_view_dir);
+		if (rc.collision) {
+			glm::mat4 model(1);
+			model = glm::translate(model, glm::vec3(rc.i + 0.5f, rc.j + 0.5f, rc.k + 0.5f));
+			model = glm::scale(model, glm::vec3(0.51f, 0.51f, 0.51f));
+
+			glDisable(GL_CULL_FACE);
+			glBindVertexArray(state->cubeVAO);
+
+			state->mesh_sp.use();
+			
+			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+			state->mesh_sp.setMatrix4fv("u_model", model);
+			glUniform3f(glGetUniformLocation(state->mesh_sp.get(), "u_color"), 0.0f, 0.0f, 0.0f);
+			glDrawArrays(GL_TRIANGLES, 0, 36);
+			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+		}
 
 		glClear(GL_DEPTH_BUFFER_BIT);
 		glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
