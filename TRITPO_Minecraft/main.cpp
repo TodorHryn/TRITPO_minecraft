@@ -209,7 +209,7 @@ struct Game_state
 	Skybox skybox;
     ShaderProgram skyboxSP;
 	ShaderProgram sunSP;
-	ShaderProgram inventoryBarSP;
+	ShaderProgram imageSP;
 	ShaderProgram inventoryBlockSP;
 	ShaderProgram mesh_sp;
 	ShaderProgram meshShadowMapSP;
@@ -219,6 +219,7 @@ struct Game_state
 	ShadowMap shadowMap4;
 	Texture sunTexture;
 	Texture inventoryBarTexture;
+	Texture crossTexture;
 	GLuint cubeVAO;
     GLuint cubeVBO;
 	GLuint squareVAO;
@@ -264,7 +265,7 @@ Raycast_result raycast(World *world, Vec3f pos, Vec3f view_dir)
     float start_y = pos.y;
     float start_z = pos.z;
 
-    float max_ray_len = 3.0f;
+    float max_ray_len = 10.0f;
     Vec3f end_point = pos + max_ray_len * view_dir;
     float end_x = end_point.x;
     float end_y = end_point.y;
@@ -730,7 +731,7 @@ void game_state_and_memory_init(Game_memory *memory)
     new (&state->mesh_sp) ShaderProgram("mesh");
     new (&state->skyboxSP) ShaderProgram("skybox");
 	new (&state->sunSP) ShaderProgram("sun");
-	new (&state->inventoryBarSP) ShaderProgram("inventoryBar");
+	new (&state->imageSP) ShaderProgram("image");
 	new (&state->inventoryBlockSP) ShaderProgram("inventoryBlock");
 	new (&state->meshShadowMapSP) ShaderProgram("meshShadowMap");
 	new (&state->shadowMap1) ShadowMap(2048, 2048);
@@ -739,6 +740,7 @@ void game_state_and_memory_init(Game_memory *memory)
 	new (&state->shadowMap4) ShadowMap(2048, 2048);
 	new (&state->sunTexture) Texture("Images/sun.png", GL_RGBA);
 	new (&state->inventoryBarTexture) Texture("Images/inventoryBar.png");
+	new (&state->crossTexture) Texture("Images/cross.png");
     new (&state->skybox) Skybox("Images/cubemap");
 
     // Cube VAO (Skybox, inventory blocks)
@@ -1208,7 +1210,6 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
     {
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
-        //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
 		glEnable(GL_STENCIL_TEST);
 		glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
@@ -1267,6 +1268,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		
 		state->mesh_sp.set3fv("light_pos", sunPosition);
 		state->mesh_sp.set1f("ambient_factor", ambient);
+		state->mesh_sp.set1f("diffuse_strength", (sunPosition.y > 0.0f) ? 1.0f : 0.2f);
 
 		glActiveTexture(GL_TEXTURE2);
 		glBindTexture(GL_TEXTURE_2D, state->shadowMap1.get());
@@ -1286,7 +1288,39 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		state->mesh_sp.setMatrix4fv("lightSpaceMatrix4", lightProjectionViewMatrix4);
 		glUniform1f(glGetUniformLocation(state->mesh_sp.get(), "shadowStrength"), (sunHeight > 0.5f ? 1.0f : std::max(sunHeight * 2.0f, 0.0f)));
 
+		if (sunHeight > 0.2f)
+			state->mesh_sp.set1f("diffuse_strength", 1.0f);
+		else if (sunHeight > 0.0f)
+			state->mesh_sp.set1f("diffuse_strength", sunHeight * 5);
+		else if (sunHeight > -0.2f) {
+			state->mesh_sp.set1f("diffuse_strength", abs(sunHeight / 2));
+			state->mesh_sp.set3fv("light_pos", -sunPosition);
+		}
+		else {
+			state->mesh_sp.set1f("diffuse_strength", 0.1f);
+			state->mesh_sp.set3fv("light_pos", -sunPosition);
+		}
+
 		renderWorld(state, state->mesh_sp);
+
+
+		Raycast_result rc = raycast(&state->world, state->cam_pos, state->cam_view_dir);
+		if (rc.collision) {
+			glm::mat4 model(1);
+			model = glm::translate(model, glm::vec3(rc.i + 0.5f, rc.j + 0.5f, rc.k + 0.5f));
+			model = glm::scale(model, glm::vec3(0.51f, 0.51f, 0.51f));
+
+			glDisable(GL_CULL_FACE);
+			glBindVertexArray(state->cubeVAO);
+
+			state->mesh_sp.use();
+			
+			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+			state->mesh_sp.setMatrix4fv("u_model", model);
+			glUniform3f(glGetUniformLocation(state->mesh_sp.get(), "u_color"), 0.0f, 0.0f, 0.0f);
+			glDrawArrays(GL_TRIANGLES, 0, 36);
+			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+		}
 
 		glClear(GL_DEPTH_BUFFER_BIT);
 		glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
@@ -1306,6 +1340,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		glUniform1f(glGetUniformLocation(state->skyboxSP.get(), "ambientStrength"), ambient * 2);
 		state->skyboxSP.setMatrix4fv("view", glm::mat4(glm::mat3(viewMatrix)));
 		state->skyboxSP.setMatrix4fv("projection", &projection.m[0][0]);
+		state->skyboxSP.set1f("ambient_factor", ambient * 2);
 		glBindVertexArray(state->cubeVAO);
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, state->skybox.texture());
@@ -1362,12 +1397,12 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 			glActiveTexture(GL_TEXTURE0);
 			glBindVertexArray(state->squareVAO);
 			state->inventoryBarTexture.bind();
-			state->inventoryBarSP.use();
+			state->imageSP.use();
 
 			glm::mat4 model(1);
 			model = glm::translate(model, glm::vec3(xPosition, yPosition, 0.0f));
 			model = glm::scale(model, glm::vec3(slotSize / input->aspect_ratio, slotSize, 1.0f));
-			state->inventoryBarSP.setMatrix4fv("model", model);
+			state->imageSP.setMatrix4fv("model", model);
 			glDrawArrays(GL_TRIANGLES, 0, 6);
 
 			//Block
@@ -1386,6 +1421,23 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 			glDrawArrays(GL_TRIANGLES, 0, 36);
 			glBindVertexArray(0);
 		}
+
+		glEnable(GL_DEPTH_TEST);
+		glBindVertexArray(0);
+
+		//Cross
+		glDisable(GL_CULL_FACE);
+		glActiveTexture(GL_TEXTURE0);
+		glBindVertexArray(state->squareVAO);
+		state->crossTexture.bind();
+		state->imageSP.use();
+
+		model = glm::scale(glm::mat4(1), glm::vec3(0.01f, 0.01f * input->aspect_ratio, 1.0f));
+		state->imageSP.setMatrix4fv("model", model);
+		glEnable(GL_COLOR_LOGIC_OP);
+		glLogicOp(GL_XOR);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+		glDisable(GL_COLOR_LOGIC_OP);
 
 		glEnable(GL_DEPTH_TEST);
 		glBindVertexArray(0);
