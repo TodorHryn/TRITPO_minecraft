@@ -150,7 +150,7 @@ struct Chunk
     Mesh meshes[BLOCK_TYPE_COUNT];
 };
 
-#define REBUILD_STACK_SIZE 32
+#define REBUILD_STACK_SIZE 128
 struct World
 {
     Chunk *next;
@@ -622,92 +622,42 @@ void game_state_and_memory_init(Game_memory *memory)
     state->world.rebuild_stack_top = 0;
 
     {
-        Chunk *c = world_add_chunk(&state->world, &state->arena, 0, 0, 0);
+        int r = 3;
+        assert((r+r+1)*(r+r+1) <= REBUILD_STACK_SIZE);
 
-        int i = 0;
-        for (int y = 0; y < 4; y++)
+        for (int z = -r; z <= r; z++)
         {
-            for (int z = 0; z < CHUNK_DIM; z++)
+            for (int x = -r; x <= r; x++)
             {
-                for (int x = 0; x < CHUNK_DIM; x++)
-                {
-                    c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = BLOCK_DIRT;
-                    c->nblocks++;
-                    i++;
-                }
-            }
-        }
-        world_push_chunk_for_rebuild(&state->world, c);
-    }
+                Chunk *c = world_add_chunk(&state->world, &state->arena, x, 0, z);
+                assert(c);
 
-    {
-        Chunk *c = world_add_chunk(&state->world, &state->arena, -1, 0, -1);
-
-        int i = 0;
-        for (int y = 0; y < 6; y++)
-        {
-            for (int z = 0; z < CHUNK_DIM; z++)
-            {
-                for (int x = 0; x < CHUNK_DIM; x++)
+                int i = 0;
+                for (int y = 0; y < 8; y++)
                 {
-                    if (i % 5 == 0)
+                    for (int z = 0; z < CHUNK_DIM; z++)
                     {
-                        c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = BLOCK_DIRT;
-                        c->nblocks++;
+                        for (int x = 0; x < CHUNK_DIM; x++)
+                        {
+                            uint8_t block_type;
+                            if (y < 2)
+                                block_type = BLOCK_STONE;
+                            else if (y < 4)
+                                block_type = BLOCK_DIRT;
+                            else if (y < 6)
+                                block_type = BLOCK_GRASS;
+                            else
+                                block_type = BLOCK_STONE;
+
+                            c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = block_type;
+                            c->nblocks++;
+                            i++;
+                        }
                     }
-                    i++;
                 }
+                world_push_chunk_for_rebuild(&state->world, c);
             }
         }
-        world_push_chunk_for_rebuild(&state->world, c);
-    }
-
-    {
-        Chunk *c = world_add_chunk(&state->world, &state->arena, -1, 0, 0);
-
-        int i = 0;
-        for (int y = 0; y < 2; y++)
-        {
-            for (int z = 0; z < CHUNK_DIM; z++)
-            {
-                for (int x = 0; x < CHUNK_DIM; x++)
-                {
-                    c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = BLOCK_DIRT;
-                    c->nblocks++;
-                    i++;
-                }
-            }
-        }
-        world_push_chunk_for_rebuild(&state->world, c);
-    }
-
-    {
-        Chunk *c = world_add_chunk(&state->world, &state->arena, 1, -2, -3);
-
-        int i = 0;
-        for (int y = 0; y < 8; y++)
-        {
-            for (int z = 0; z < CHUNK_DIM; z++)
-            {
-                for (int x = 0; x < CHUNK_DIM; x++)
-                {
-                    uint8_t block_type;
-                    if (y < 2)
-                        block_type = BLOCK_STONE;
-                    else if (y < 4)
-                        block_type = BLOCK_DIRT;
-                    else if (y < 6)
-                        block_type = BLOCK_GRASS;
-                    else
-                        block_type = BLOCK_STONE;
-
-                    c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = block_type;
-                    c->nblocks++;
-                    i++;
-                }
-            }
-        }
-        world_push_chunk_for_rebuild(&state->world, c);
     }
 
     state->cam_pos = Vec3f(0, 20, 0);
@@ -1364,7 +1314,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		glm::mat4 model(1);
 		model = glm::translate(model, sunPosition + glm::vec3(state->cam_pos.x, state->cam_pos.y, state->cam_pos.z));
 		glm::vec3 sunPositionProjection(sunPosition.x, sunPosition.y, 0);
-		float angle = 3.14 / 2 - acos(glm::dot(glm::normalize(sunPosition), glm::normalize(sunPositionProjection)));
+		float angle = 3.14f / 2.0f - acos(glm::dot(glm::normalize(sunPosition), glm::normalize(sunPositionProjection)));
 		glm::vec3 sunRotationAxis = glm::cross(sunPosition, sunPositionProjection);
 		model = glm::rotate(model, angle, sunRotationAxis);
 		model = glm::scale(model, glm::vec3(5.0f, 5.0f, 5.0f));
@@ -1389,7 +1339,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 
 		for (int i = 0; i < BLOCK_TYPE_COUNT; ++i) {
 			float slotSize = (state->block_to_place == i) ? 0.07f : 0.05f;
-			float xPosition = (-static_cast<float>(BLOCK_TYPE_COUNT) / 2 + ((BLOCK_TYPE_COUNT % 2) ? 0 : 0.5) + i) * 0.08f;
+			float xPosition = (-static_cast<float>(BLOCK_TYPE_COUNT) / 2 + ((BLOCK_TYPE_COUNT % 2) ? 0 : 0.5f) + i) * 0.08f;
 			float yPosition = -1.0f + ((state->block_to_place == i) ? 0.01f + slotSize : 0.03f + slotSize);
 
 			//Bar slot
