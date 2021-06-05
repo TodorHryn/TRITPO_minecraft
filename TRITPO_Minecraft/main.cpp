@@ -555,6 +555,53 @@ void gen_ranges_3d(uint8_t *blocks, Range3d *ranges, uint8_t *visited, int dim, 
     *num_of_ranges = ranges_count;
 }
 
+unsigned int hash(unsigned int x) { //https://stackoverflow.com/a/12996028
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = (x >> 16) ^ x;
+    return x;
+}
+
+Vec3f randomGradient(int x, int z) {
+	int h = hash(hash(x) + z);
+	float gx = h;
+	float gz = hash(h);
+
+	return normalize(Vec3f(gx, 0, gz));
+}
+
+float interpolate(float begin, float end, float pos) {
+	return (end - begin) * pos + begin;
+}
+
+float perlin_noise(float x, float z) {
+	int x0 = floor(x);
+	int z0 = floor(z);
+
+	Vec3f g00 = randomGradient(x0, z0);
+	Vec3f g01 = randomGradient(x0, z0 + 1);
+	Vec3f g10 = randomGradient(x0 + 1, z0);
+	Vec3f g11 = randomGradient(x0 + 1, z0 + 1);
+
+	Vec3f d00(x - x0, 0, z - z0);
+	Vec3f d01(x - x0, 0, z - z0 - 1);
+	Vec3f d10(x - x0 - 1, 0, z - z0);
+	Vec3f d11(x - x0 - 1, 0, z - z0 - 1);
+
+	float dot00 = dot(g00, d00);
+	float dot01 = dot(g01, d01);
+	float dot10 = dot(g10, d10);
+	float dot11 = dot(g11, d11);
+
+	float dx = x - x0;
+	float dz = z - z0;
+
+	float int0 = interpolate(dot00, dot01, dz);
+	float int1 = interpolate(dot10, dot11, dz);
+
+	return interpolate(int0, int1, dx);
+}
+
 void game_state_and_memory_init(Game_memory *memory)
 {
     assert(!memory->is_initialized);
@@ -625,11 +672,11 @@ void game_state_and_memory_init(Game_memory *memory)
 	new (&state->world.rebuild_stack) std::stack<Chunk*>();
 
     {
-        for (int z = -WORLD_RADIUS; z <= WORLD_RADIUS; z++)
+        for (int chunk_z = -WORLD_RADIUS; chunk_z <= WORLD_RADIUS; chunk_z++)
         {
-            for (int x = -WORLD_RADIUS; x <= WORLD_RADIUS; x++)
+            for (int chunk_x = -WORLD_RADIUS; chunk_x <= WORLD_RADIUS; chunk_x++)
             {
-                Chunk *c = world_add_chunk(&state->world, &state->arena, x, 0, z);
+                Chunk *c = world_add_chunk(&state->world, &state->arena, chunk_x, 0, chunk_z);
                 assert(c);
 
                 int i = 0;
@@ -640,18 +687,15 @@ void game_state_and_memory_init(Game_memory *memory)
                         for (int x = 0; x < CHUNK_DIM; x++)
                         {
                             uint8_t block_type;
-                            if (y < 2)
-                                block_type = BLOCK_STONE;
-                            else if (y < 4)
-                                block_type = BLOCK_DIRT;
-                            else if (y < 6)
-                                block_type = BLOCK_GRASS;
-                            else
-                                block_type = BLOCK_STONE;
+							int noise_x = (chunk_x * CHUNK_DIM + x);
+							int noise_z = (chunk_z * CHUNK_DIM + z);
 
-                            c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = block_type;
-                            c->nblocks++;
-                            i++;
+                            if (y < 5 * perlin_noise(noise_x / 10.0f, noise_z / 10.0f) + 3) {
+                                block_type = BLOCK_STONE;
+								c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = block_type;
+								c->nblocks++;
+								i++;
+							}
                         }
                     }
                 }
@@ -1396,6 +1440,13 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 
 int main(void)
 {
+	//for (float x = 10; x < 14; x += 0.1) {
+	//	for (float z = 10; z < 14; z += 0.1) {
+	//		std::cout << (int) abs(perlin_noise(x, z) * 5) + 3;
+	//	}
+	//	std::cout << std::endl;
+	//}
+	//system("pause");
 
     if (glfwInit() == GLFW_FALSE)
     {
