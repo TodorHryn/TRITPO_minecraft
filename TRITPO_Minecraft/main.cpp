@@ -24,6 +24,7 @@
 #define TO_RADIANS(deg) ((PI / 180.0f) * deg)
 
 #define WORLD_RADIUS 5
+#define WORLD_SEED 0x7b447dc7
 
 struct Button
 {
@@ -563,7 +564,7 @@ unsigned int hash(unsigned int x) { //https://stackoverflow.com/a/12996028
 }
 
 Vec3f randomGradient(int x, int z) {
-	int h = hash(hash(x) + z);
+	int h = hash(hash(hash(x) + z) + WORLD_SEED);
 	float gx = h;
 	float gz = hash(h);
 
@@ -600,6 +601,15 @@ float perlin_noise(float x, float z) {
 	float int1 = interpolate(dot10, dot11, dz);
 
 	return interpolate(int0, int1, dx);
+}
+
+int get_height(int x, int z) {
+	float noise0 = (perlin_noise(x / 128.0f, z / 128.0f) + 1) / 2;
+	float noise1 = (perlin_noise(x / 64.0f, z / 64.0f) + 1) / 2;
+	float noise2 = (perlin_noise(x / 32.0f, z / 32.0f) + 1) / 2;
+	float noise3 = (perlin_noise(x / 16.0f, z / 16.0f) + 1) / 2;
+
+	return CHUNK_DIM * (6 * noise0 + 3 * noise1 + 1.5 * noise2 + 0.75 * noise3);
 }
 
 void game_state_and_memory_init(Game_memory *memory)
@@ -671,32 +681,32 @@ void game_state_and_memory_init(Game_memory *memory)
     state->world.next = 0;
 	new (&state->world.rebuild_stack) std::stack<Chunk*>();
 
-    {
+    for (int chunk_y = 7; chunk_y >= 0; chunk_y--) {
         for (int chunk_z = -WORLD_RADIUS; chunk_z <= WORLD_RADIUS; chunk_z++)
         {
             for (int chunk_x = -WORLD_RADIUS; chunk_x <= WORLD_RADIUS; chunk_x++)
             {
-                Chunk *c = world_add_chunk(&state->world, &state->arena, chunk_x, 0, chunk_z);
+                Chunk *c = world_add_chunk(&state->world, &state->arena, chunk_x, chunk_y, chunk_z);
                 assert(c);
 
                 int i = 0;
-                for (int y = 0; y < 8; y++)
+                for (int z = 0; z < CHUNK_DIM; z++)
                 {
-                    for (int z = 0; z < CHUNK_DIM; z++)
+                    for (int x = 0; x < CHUNK_DIM; x++)
                     {
-                        for (int x = 0; x < CHUNK_DIM; x++)
-                        {
-                            uint8_t block_type;
-							int noise_x = (chunk_x * CHUNK_DIM + x);
-							int noise_z = (chunk_z * CHUNK_DIM + z);
+						int noise_x = (chunk_x * CHUNK_DIM + x);
+						int noise_z = (chunk_z * CHUNK_DIM + z);					
+						int h = get_height(noise_x, noise_z) - CHUNK_DIM * chunk_y;
 
-                            if (y < 5 * perlin_noise(noise_x / 10.0f, noise_z / 10.0f) + 3) {
-                                block_type = BLOCK_STONE;
-								c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = block_type;
-								c->nblocks++;
-								i++;
-							}
-                        }
+						for (int y = 0; y < std::min(h, CHUNK_DIM); y++)
+						{
+							uint8_t block_type;
+
+							block_type = BLOCK_STONE;
+							c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = block_type;
+							c->nblocks++;
+							i++;
+						}
                     }
                 }
                 world_push_chunk_for_rebuild(&state->world, c);
@@ -704,7 +714,7 @@ void game_state_and_memory_init(Game_memory *memory)
         }
     }
 
-    state->cam_pos = Vec3f(0, 20, 0);
+    state->cam_pos = Vec3f(0, 120, 0);
     state->cam_up = Vec3f(0, 1, 0);
 
     state->cam_rot.pitch = 0.0f;
@@ -1254,7 +1264,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		//World
         state->mesh_sp.use();
 
-		Mat4x4f projection = mat4x4f_perspective(90.0f, input->aspect_ratio, 0.1f, 100.0f);
+		Mat4x4f projection = mat4x4f_perspective(90.0f, input->aspect_ratio, 0.1f, 200.0f);
         state->mesh_sp.setMatrix4fv("u_projection", &projection.m[0][0]);
 		
 		Mat4x4f view = mat4x4f_lookat(state->cam_pos, state->cam_pos + state->cam_view_dir, state->cam_up);
@@ -1476,7 +1486,7 @@ int main(void)
 
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-#define PERMANENT_MEM_SIZE MEMORY_MB(1)
+#define PERMANENT_MEM_SIZE MEMORY_MB(16)
 #define TRANSIENT_MEM_SIZE MEMORY_GB(1)
 
     static uint8_t permanent_mem_blob[PERMANENT_MEM_SIZE];
