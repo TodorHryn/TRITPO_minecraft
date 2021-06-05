@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <iostream>
 #include <algorithm>
+#include <stack>
 
 #include "glad\glad.h"
 #include "GLFW\glfw3.h"
@@ -21,6 +22,8 @@
 #define MEMORY_MB(x) MEMORY_KB((x) * 1024ull)
 #define MEMORY_GB(x) MEMORY_MB((x) * 1024ull)
 #define TO_RADIANS(deg) ((PI / 180.0f) * deg)
+
+#define WORLD_RADIUS 5
 
 struct Button
 {
@@ -150,25 +153,25 @@ struct Chunk
     Mesh meshes[BLOCK_TYPE_COUNT];
 };
 
-#define REBUILD_STACK_SIZE 128
 struct World
 {
     Chunk *next;
 
-    int rebuild_stack_top;
-    Chunk *rebuild_stack[REBUILD_STACK_SIZE];
+	std::stack<Chunk*> rebuild_stack;
 };
 
 void world_push_chunk_for_rebuild(World *w, Chunk *c)
 {
-    assert(w->rebuild_stack_top < REBUILD_STACK_SIZE);
-    w->rebuild_stack[w->rebuild_stack_top++] = c;
+	w->rebuild_stack.push(c);
 }
 
-Chunk *world_pop_chunk_for_rebuild(World *w)
+Chunk* world_pop_chunk_for_rebuild(World *w)
 {
-    assert(w->rebuild_stack_top > 0);
-    return w->rebuild_stack[--w->rebuild_stack_top];
+    assert(!w->rebuild_stack.empty());
+	Chunk *c = w->rebuild_stack.top();
+	w->rebuild_stack.pop();
+
+    return c;
 }
 
 Chunk *world_add_chunk(World *world, Memory_arena *arena, int x, int y, int z)
@@ -619,15 +622,12 @@ void game_state_and_memory_init(Game_memory *memory)
     state->arena.end = (uint8_t *)memory->permanent_mem + memory->permanent_mem_size;
 
     state->world.next = 0;
-    state->world.rebuild_stack_top = 0;
+	new (&state->world.rebuild_stack) std::stack<Chunk*>();
 
     {
-        int r = 3;
-        assert((r+r+1)*(r+r+1) <= REBUILD_STACK_SIZE);
-
-        for (int z = -r; z <= r; z++)
+        for (int z = -WORLD_RADIUS; z <= WORLD_RADIUS; z++)
         {
-            for (int x = -r; x <= r; x++)
+            for (int x = -WORLD_RADIUS; x <= WORLD_RADIUS; x++)
             {
                 Chunk *c = world_add_chunk(&state->world, &state->arena, x, 0, z);
                 assert(c);
@@ -896,7 +896,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
         }
 
         Chunk *chunk_to_rebuild = 0;
-        if (state->world.rebuild_stack_top > 0)
+        if (!state->world.rebuild_stack.empty())
         {
             chunk_to_rebuild = world_pop_chunk_for_rebuild(&state->world);
         }
