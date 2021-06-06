@@ -47,6 +47,10 @@
     <ClInclude Include="Skybox.h" />
     <ClInclude Include="Texture.h" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="fontchar.frag" />
+    <Text Include="fontchar.vert" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
     <ProjectGuid>{52F575E8-CF33-44B5-9083-41C007610AE6}</ProjectGuid>

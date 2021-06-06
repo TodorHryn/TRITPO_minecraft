@@ -61,4 +61,8 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="fontchar.vert" />
+    <Text Include="fontchar.frag" />
+  </ItemGroup>
 </Project>

@@ -35,6 +35,8 @@ struct Button
 struct Game_input
 {
     float aspect_ratio;
+	float window_width;
+	float window_height;
     float dt;
 
     float mouse_dx;
@@ -217,6 +219,7 @@ struct Game_state
 	ShaderProgram inventoryBlockSP;
 	ShaderProgram mesh_sp;
 	ShaderProgram meshShadowMapSP;
+	ShaderProgram fontCharacterSP;
 	ShadowMap shadowMap1;
 	ShadowMap shadowMap2;
 	ShadowMap shadowMap3;
@@ -224,6 +227,7 @@ struct Game_state
 	Texture sunTexture;
 	Texture inventoryBarTexture;
 	Texture crossTexture;
+	Texture fontTexture;
 	GLuint cubeVAO;
     GLuint cubeVBO;
 	GLuint squareVAO;
@@ -236,6 +240,10 @@ struct Game_state
     Vec3f cam_rot;
 
     uint8_t block_to_place;
+
+	int frameCount;
+	float fpsCounterPrevTime;
+	float fps;
 
     World world;
 };
@@ -731,6 +739,10 @@ void game_state_and_memory_init(Game_memory *memory)
 
     state->block_to_place = BLOCK_GRASS;
 
+	state->frameCount = 0;
+	state->fpsCounterPrevTime = glfwGetTime();
+	state->fps = 0;
+
     // NOTE(max): call constructors on existing memory
     new (&state->mesh_sp) ShaderProgram("mesh");
     new (&state->skyboxSP) ShaderProgram("skybox");
@@ -738,6 +750,7 @@ void game_state_and_memory_init(Game_memory *memory)
 	new (&state->imageSP) ShaderProgram("image");
 	new (&state->inventoryBlockSP) ShaderProgram("inventoryBlock");
 	new (&state->meshShadowMapSP) ShaderProgram("meshShadowMap");
+	new (&state->fontCharacterSP) ShaderProgram("fontchar");
 	new (&state->shadowMap1) ShadowMap(2048, 2048);
 	new (&state->shadowMap2) ShadowMap(2048, 2048);
 	new (&state->shadowMap3) ShadowMap(2048, 2048);
@@ -745,6 +758,7 @@ void game_state_and_memory_init(Game_memory *memory)
 	new (&state->sunTexture) Texture("Images/sun.png", GL_RGBA);
 	new (&state->inventoryBarTexture) Texture("Images/inventoryBar.png");
 	new (&state->crossTexture) Texture("Images/cross.png");
+	new (&state->fontTexture) Texture("Images/OpenSans.bmp");
     new (&state->skybox) Skybox("Images/cubemap");
 
     // Cube VAO (Skybox, inventory blocks)
@@ -799,6 +813,32 @@ void renderWorld(Game_state *state, ShaderProgram &sp) {
 			}
 		}
 		c = c->next;
+	}
+}
+
+void drawText(Game_state *state, Game_input *input, std::string text, float x, float y, float scale) {
+	const float spacing = 0.6;
+
+	glEnable(GL_COLOR_LOGIC_OP);
+	glLogicOp(GL_OR);
+
+	glDisable(GL_CULL_FACE);
+	glActiveTexture(GL_TEXTURE0);
+	glBindVertexArray(state->squareVAO);
+	state->fontTexture.bind();
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	state->fontCharacterSP.use();
+
+	for (int i = 0; i < text.size(); ++i) {
+		int pos = toupper(text[i]) - 32;
+
+		glm::mat4 model(1);
+		model = glm::translate(model, glm::vec3(x + spacing * i * scale * 2 / input->aspect_ratio, y, 0.0f));
+		model = glm::scale(model, glm::vec3(scale / input->aspect_ratio, scale, 1.0f));
+		state->fontCharacterSP.setMatrix4fv("model", model);
+		state->fontCharacterSP.set3fv("texturePos", glm::vec3(pos % 8, 7 - pos / 8, 0));
+		glDrawArrays(GL_TRIANGLES, 0, 6);
 	}
 }
 
@@ -1426,8 +1466,12 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 			glBindVertexArray(0);
 		}
 
-		glEnable(GL_DEPTH_TEST);
 		glBindVertexArray(0);
+
+		//FPS
+		drawText(state, input, "FPS: " + std::to_string((int) state->fps), -0.96, 0.96, 0.04);
+
+		glEnable(GL_DEPTH_TEST);
 
 		//Cross
 		glDisable(GL_CULL_FACE);
@@ -1515,8 +1559,17 @@ int main(void)
         glfwGetFramebufferSize(window, &window_width, &window_height);
         glViewport(0, 0, window_width, window_height);
 
+		game_input->window_width = window_width;
+		game_input->window_height = window_height;
         game_input->aspect_ratio = float(window_width) / float(window_height);
         game_input->dt = float(curr_time - prev_time);
+
+		Game_state *state = (Game_state *) game_memory.permanent_mem;
+		if (state->frameCount % 10 == 0) {
+			state->fps = 1 / ((glfwGetTime() - state->fpsCounterPrevTime) / 10);
+			state->fpsCounterPrevTime = glfwGetTime();
+		}
+		state->frameCount++;
 
         double curr_mx;
         double curr_my;
