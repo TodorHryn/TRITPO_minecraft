@@ -25,7 +25,8 @@
 
 #define PERMANENT_MEM_SIZE MEMORY_MB(16)
 #define TRANSIENT_MEM_SIZE MEMORY_GB(1)
-#define WORLD_RADIUS 8
+#define WORLD_RADIUS 3
+#define GENERATION_Y_RADIUS 4
 #define WORLD_SEED 0x7b447dc7
 
 struct Button
@@ -622,6 +623,33 @@ int get_height(int x, int z) {
 	return CHUNK_DIM * (6 * noise0 + 3 * noise1 + 1.5 * noise2 + 0.75 * noise3);
 }
 
+void generate_chunk(Game_state *state, int chunk_x, int chunk_y, int chunk_z) {
+	Chunk *c = world_add_chunk(&state->world, &state->arena, chunk_x, chunk_y, chunk_z);
+    assert(c);
+
+    int i = 0;
+    for (int z = 0; z < CHUNK_DIM; z++)
+    {
+        for (int x = 0; x < CHUNK_DIM; x++)
+        {
+			int noise_x = (chunk_x * CHUNK_DIM + x);
+			int noise_z = (chunk_z * CHUNK_DIM + z);					
+			int h = get_height(noise_x, noise_z) - CHUNK_DIM * chunk_y;
+
+			for (int y = 0; y < std::min(h, CHUNK_DIM); y++)
+			{
+				uint8_t block_type;
+
+				block_type = BLOCK_STONE;
+				c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = block_type;
+				c->nblocks++;
+				i++;
+			}
+        }
+    }
+    world_push_chunk_for_rebuild(&state->world, c);
+}
+
 void game_state_and_memory_init(Game_memory *memory)
 {
     assert(!memory->is_initialized);
@@ -696,30 +724,7 @@ void game_state_and_memory_init(Game_memory *memory)
         {
             for (int chunk_x = -WORLD_RADIUS; chunk_x <= WORLD_RADIUS; chunk_x++)
             {
-                Chunk *c = world_add_chunk(&state->world, &state->arena, chunk_x, chunk_y, chunk_z);
-                assert(c);
-
-                int i = 0;
-                for (int z = 0; z < CHUNK_DIM; z++)
-                {
-                    for (int x = 0; x < CHUNK_DIM; x++)
-                    {
-						int noise_x = (chunk_x * CHUNK_DIM + x);
-						int noise_z = (chunk_z * CHUNK_DIM + z);					
-						int h = get_height(noise_x, noise_z) - CHUNK_DIM * chunk_y;
-
-						for (int y = 0; y < std::min(h, CHUNK_DIM); y++)
-						{
-							uint8_t block_type;
-
-							block_type = BLOCK_STONE;
-							c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = block_type;
-							c->nblocks++;
-							i++;
-						}
-                    }
-                }
-                world_push_chunk_for_rebuild(&state->world, c);
+                generate_chunk(state, chunk_x, chunk_y, chunk_z);
             }
         }
     }
@@ -1099,6 +1104,19 @@ void rebuild_chunk(Game_memory *memory, Chunk *chunk) {
 	}
 }
 
+bool chunk_exists(Game_state *state, int x, int y, int z) {
+	Chunk *c = state->world.next;
+
+	while (c != 0) {
+		if (c->x == x && c->y == y && c->z == z) 
+			return true;
+
+		c = c->next;
+	}
+
+	return false;
+}
+
 void game_update_and_render(Game_input *input, Game_memory *memory)
 {
     assert(memory->is_initialized);
@@ -1246,6 +1264,22 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
             }
         }
 
+		//Generate new chunks
+		int cam_chunk_x = (int) state->cam_pos.x >> CHUNK_DIM_LOG2;
+		int cam_chunk_y = (int) state->cam_pos.y >> CHUNK_DIM_LOG2;
+		int cam_chunk_z = (int) state->cam_pos.z >> CHUNK_DIM_LOG2;
+
+		for (int x = cam_chunk_x - WORLD_RADIUS; x <= cam_chunk_x + WORLD_RADIUS; ++x) {
+			for (int z = cam_chunk_z - WORLD_RADIUS; z <= cam_chunk_z + WORLD_RADIUS; ++z) {
+				for (int i = cam_chunk_y - GENERATION_Y_RADIUS; i <= cam_chunk_y + GENERATION_Y_RADIUS; ++i) {
+					if (!chunk_exists(state, x, i, z)) {
+						generate_chunk(state, x, i, z);
+					}
+				}
+			}
+		}
+
+		//Rebuild chunks
         while (!state->world.rebuild_stack.empty())
         {
             rebuild_chunk(memory, world_pop_chunk_for_rebuild(&state->world));
