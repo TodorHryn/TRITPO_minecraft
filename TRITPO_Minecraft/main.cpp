@@ -58,7 +58,7 @@ Chunk* world_pop_chunk_for_rebuild(World *w)
 
 Chunk *world_add_chunk(World *world, Memory_arena *arena, int x, int y, int z)
 {
-    Chunk *result = (Chunk *)memory_arena_alloc(arena, sizeof(Chunk) + (CHUNK_DIM * CHUNK_DIM * CHUNK_DIM));
+    Chunk *result = (Chunk *)memory_arena_alloc(arena, sizeof(Chunk));
 
     if (result)
     {
@@ -67,8 +67,7 @@ Chunk *world_add_chunk(World *world, Memory_arena *arena, int x, int y, int z)
         result->z = z;
         result->next = world->next;
         result->nblocks = 0;
-        result->blocks = (uint8_t *)&result[1];
-
+		
         for (int i = 0; i < BLOCKS_IN_CHUNK; i++)
         {
             result->blocks[i] = BLOCK_AIR;

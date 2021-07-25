@@ -132,7 +132,7 @@ struct Chunk
     int z;
     Chunk *next;
     int nblocks;
-    uint8_t *blocks;
+    uint8_t blocks[CHUNK_DIM * CHUNK_DIM * CHUNK_DIM];
     Mesh meshes[BLOCK_TYPE_COUNT];
 };
 
