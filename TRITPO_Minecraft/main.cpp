@@ -12,92 +12,8 @@
 #include "glad.c"
 #include "glm\gtc\matrix_transform.hpp"
 #include "glm\gtc\type_ptr.hpp"
-#include "MainHeader.h"
-#include "ShaderProgram.h"
-#include "Skybox.h"
-#include "Texture.h"
-#include "ShadowMap.h"
-#include "3DMath.h"
+#include "main.h"
 
-#define MEMORY_KB(x) ((x) * 1024ull)
-#define MEMORY_MB(x) MEMORY_KB((x) * 1024ull)
-#define MEMORY_GB(x) MEMORY_MB((x) * 1024ull)
-#define TO_RADIANS(deg) ((PI / 180.0f) * deg)
-
-#define PERMANENT_MEM_SIZE MEMORY_MB(16)
-#define TRANSIENT_MEM_SIZE MEMORY_GB(1)
-#define CHUNK_DIM_LOG2 4
-#define WORLD_RADIUS 3
-#define GENERATION_Y_RADIUS 4
-#define WORLD_SEED 0x7b447dc7
-
-#define CHUNK_DIM (1 << CHUNK_DIM_LOG2)
-#define BLOCKS_IN_CHUNK ((CHUNK_DIM) * (CHUNK_DIM) * (CHUNK_DIM))
-
-struct Button
-{
-    int is_pressed;
-    int was_pressed;
-};
-
-struct Game_input
-{
-    float aspect_ratio;
-	float window_width;
-	float window_height;
-    float dt;
-
-    float mouse_dx;
-    float mouse_dy;
-    
-    union
-    {
-        struct
-        {
-            Button mleft;
-            Button mright;
-
-            Button w;
-            Button a;
-            Button s;
-            Button d;
-
-            Button enter;
-            Button space;
-            Button lshift;
-
-            Button n1;
-            Button n2;
-            Button n3;
-            Button n4;
-        };
-
-        Button buttons[13];
-    };
-};
-
-struct Game_memory
-{
-    int is_initialized;
-
-    uint64_t permanent_mem_size;
-    void *permanent_mem;
-
-    uint64_t transient_mem_size;
-    void *transient_mem;
-
-	Range3d ranges[BLOCKS_IN_CHUNK];
-	uint8_t visited[BLOCKS_IN_CHUNK];
-};
-
-struct Memory_arena
-{
-    uint8_t *curr;
-    uint8_t *end;
-};
-
-#define ALIGN_UP(n, k) (((n) + (k) - 1) & ((~(k)) + 1))
-#define ALIGN_PTR_UP(n, k) ALIGN_UP((uint64_t)(n), (k))
 void *memory_arena_alloc(Memory_arena *arena, int64_t size)
 {
     assert(size > 0);
@@ -125,51 +41,6 @@ inline void memory_arena_set_cursor(Memory_arena *arena, void *cursor)
     assert(cursor <= (void *)arena->end);
     arena->curr = (uint8_t *)cursor;
 }
-
-enum Block_type
-{
-    BLOCK_GRASS,
-    BLOCK_DIRT,
-    BLOCK_STONE,
-    BLOCK_SNOW,
-    BLOCK_AIR,
-   
-    BLOCK_TYPE_COUNT = BLOCK_AIR,
-};
-static_assert(BLOCK_TYPE_COUNT < 255, "Block_type has more than 255 block types, this won't fit in uint8_t");
-
-Vec3f Block_colors[BLOCK_TYPE_COUNT] =
-{
-	Vec3f(0, 1, 0),
-	Vec3f(130 / 255.0f, 108 / 255.0f, 47 / 255.0f),
-	Vec3f(0.4f, 0.4f, 0.4f),
-	Vec3f(1, 1, 1)
-};
-
-struct Mesh
-{
-    int num_of_vs;
-    GLuint vao;
-    GLuint vbo;
-};
-
-struct Chunk
-{
-    int x;
-    int y;
-    int z;
-    Chunk *next;
-    int nblocks;
-    uint8_t *blocks;
-    Mesh meshes[BLOCK_TYPE_COUNT];
-};
-
-struct World
-{
-    Chunk *next;
-
-	std::stack<Chunk*> rebuild_stack;
-};
 
 void world_push_chunk_for_rebuild(World *w, Chunk *c)
 {
@@ -215,61 +86,6 @@ Chunk *world_add_chunk(World *world, Memory_arena *arena, int x, int y, int z)
 
     return (result);
 }
-
-struct Game_state
-{
-    Memory_arena arena;
-
-	Skybox skybox;
-    ShaderProgram skyboxSP;
-	ShaderProgram sunSP;
-	ShaderProgram imageSP;
-	ShaderProgram inventoryBlockSP;
-	ShaderProgram mesh_sp;
-	ShaderProgram meshShadowMapSP;
-	ShaderProgram fontCharacterSP;
-	ShadowMap shadowMap1;
-	ShadowMap shadowMap2;
-	ShadowMap shadowMap3;
-	ShadowMap shadowMap4;
-	Texture sunTexture;
-	Texture inventoryBarTexture;
-	Texture crossTexture;
-	Texture fontTexture;
-	GLuint cubeVAO;
-    GLuint cubeVBO;
-	GLuint squareVAO;
-	GLuint squareVBO;
-
-    Vec3f cam_pos;
-    Vec3f cam_view_dir;
-    Vec3f cam_move_dir;
-    Vec3f cam_up;
-    Vec3f cam_rot;
-
-    uint8_t block_to_place;
-
-	int frameCount;
-	float fpsCounterPrevTime;
-	float fps;
-
-    World world;
-};
-
-struct Raycast_result
-{
-    bool collision;
-    float last_t;
-    Chunk *chunk;
-
-    int i;
-    int j;
-    int k;
-    
-    int last_i;
-    int last_j;
-    int last_k;
-};
 
 Raycast_result raycast(World *world, Vec3f pos, Vec3f view_dir)
 {

@@ -1,30 +1,40 @@
 #pragma once
 
-#include <stdint.h>
+#include "3DMath.h"
+#include "Texture.h"
+#include "ShaderProgram.h"
+#include "Skybox.h"
+#include "ShadowMap.h"
 
-#include "glad\glad.h"
-#include "GLFW\glfw3.h"
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
-#include "glad.c"
-#include "glm\gtc\matrix_transform.hpp"
-#include "glm\gtc\type_ptr.hpp"
-
-#define TRANSIENT_MEM_SIZE MEMORY_GB(1)
-#define PERMANENT_MEM_SIZE MEMORY_MB(32)
-#define WORLD_RADIUS 8
-#define CHUNK_DIM_LOG2 4
-#define WORLD_SEED 0x7b447dc7
-
-#define CHUNK_DIM (1 << CHUNK_DIM_LOG2)
-#define BLOCKS_IN_CHUNK ((CHUNK_DIM) * (CHUNK_DIM) * (CHUNK_DIM))
 #define MEMORY_KB(x) ((x) * 1024ull)
 #define MEMORY_MB(x) MEMORY_KB((x) * 1024ull)
 #define MEMORY_GB(x) MEMORY_MB((x) * 1024ull)
 #define TO_RADIANS(deg) ((PI / 180.0f) * deg)
 #define ALIGN_UP(n, k) (((n) + (k) - 1) & ((~(k)) + 1))
 #define ALIGN_PTR_UP(n, k) ALIGN_UP((uint64_t)(n), (k))
+
+#define PERMANENT_MEM_SIZE MEMORY_MB(16)
+#define TRANSIENT_MEM_SIZE MEMORY_GB(1)
+#define CHUNK_DIM_LOG2 4
+#define WORLD_RADIUS 3
+#define GENERATION_Y_RADIUS 4
+#define WORLD_SEED 0x7b447dc7
+
+#define CHUNK_DIM (1 << CHUNK_DIM_LOG2)
+#define BLOCKS_IN_CHUNK ((CHUNK_DIM) * (CHUNK_DIM) * (CHUNK_DIM))
+
+struct Range3d
+{
+    uint8_t type;
+
+    int start_x;
+    int start_y;
+    int start_z;
+
+    int end_x;
+    int end_y;
+    int end_z;
+};
 
 struct Button
 {
@@ -77,6 +87,9 @@ struct Game_memory
 
     uint64_t transient_mem_size;
     void *transient_mem;
+
+	Range3d ranges[BLOCKS_IN_CHUNK];
+	uint8_t visited[BLOCKS_IN_CHUNK];
 };
 
 struct Memory_arena
@@ -185,30 +198,3 @@ struct Raycast_result
     int last_k;
 };
 
-struct Range3d
-{
-    uint8_t type;
-
-    int start_x;
-    int start_y;
-    int start_z;
-
-    int end_x;
-    int end_y;
-    int end_z;
-};
-
-void *memory_arena_alloc(Memory_arena *arena, int64_t size);
-inline void *memory_arena_get_cursor(Memory_arena *arena);
-inline void memory_arena_set_cursor(Memory_arena *arena, void *cursor);
-void world_push_chunk_for_rebuild(World *w, Chunk *c);
-Chunk* world_pop_chunk_for_rebuild(World *w);
-Chunk *world_add_chunk(World *world, Memory_arena *arena, int x, int y, int z);
-Raycast_result raycast(World *world, Vec3f pos, Vec3f view_dir);
-void gen_ranges_3d(uint8_t *blocks, Range3d *ranges, uint8_t *visited, int dim, int count, int *num_of_ranges);
-
-void game_state_and_memory_init(Game_memory *memory);
-void renderWorld(Game_state *state, ShaderProgram &sp);
-void drawText(Game_state *state, Game_input *input, std::string text, float x, float y, float scale);
-void rebuild_chunk(Game_memory *memory, Chunk *chunk);
-void game_update_and_render(Game_input *input, Game_memory *memory);

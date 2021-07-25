@@ -60,7 +60,7 @@
     <ClInclude Include="ShadowMap.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="MainHeader.h">
+    <ClInclude Include="main.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>
