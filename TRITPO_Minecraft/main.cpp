@@ -12,6 +12,7 @@
 #include "glad.c"
 #include "glm\gtc\matrix_transform.hpp"
 #include "glm\gtc\type_ptr.hpp"
+#include "MainHeader.h"
 #include "ShaderProgram.h"
 #include "Skybox.h"
 #include "Texture.h"
@@ -25,9 +26,13 @@
 
 #define PERMANENT_MEM_SIZE MEMORY_MB(16)
 #define TRANSIENT_MEM_SIZE MEMORY_GB(1)
+#define CHUNK_DIM_LOG2 4
 #define WORLD_RADIUS 3
 #define GENERATION_Y_RADIUS 4
 #define WORLD_SEED 0x7b447dc7
+
+#define CHUNK_DIM (1 << CHUNK_DIM_LOG2)
+#define BLOCKS_IN_CHUNK ((CHUNK_DIM) * (CHUNK_DIM) * (CHUNK_DIM))
 
 struct Button
 {
@@ -80,6 +85,9 @@ struct Game_memory
 
     uint64_t transient_mem_size;
     void *transient_mem;
+
+	Range3d ranges[BLOCKS_IN_CHUNK];
+	uint8_t visited[BLOCKS_IN_CHUNK];
 };
 
 struct Memory_arena
@@ -94,6 +102,7 @@ void *memory_arena_alloc(Memory_arena *arena, int64_t size)
 {
     assert(size > 0);
     assert((uint64_t)arena->curr % 8 == 0);
+
 
     if (arena->end < (arena->curr + size))
     {
@@ -143,10 +152,6 @@ struct Mesh
     GLuint vao;
     GLuint vbo;
 };
-
-#define CHUNK_DIM_LOG2 4
-#define CHUNK_DIM (1 << 4)
-#define BLOCKS_IN_CHUNK ((CHUNK_DIM) * (CHUNK_DIM) * (CHUNK_DIM))
 
 struct Chunk
 {
@@ -425,19 +430,6 @@ end_loop:
 
     return (result);
 }
-
-struct Range3d
-{
-    uint8_t type;
-
-    int start_x;
-    int start_y;
-    int start_z;
-
-    int end_x;
-    int end_y;
-    int end_z;
-};
 
 void gen_ranges_3d(uint8_t *blocks, Range3d *ranges, uint8_t *visited, int dim, int count, int *num_of_ranges)
 {
@@ -855,8 +847,9 @@ void rebuild_chunk(Game_memory *memory, Chunk *chunk) {
 		arena.curr = (uint8_t *) memory->transient_mem;
 		arena.end  = (uint8_t *) memory->transient_mem + memory->transient_mem_size;
         
-		Range3d *ranges  = (Range3d *)memory_arena_alloc(&arena, BLOCKS_IN_CHUNK * sizeof(Range3d));
-		uint8_t *visited = (uint8_t *)memory_arena_alloc(&arena, BLOCKS_IN_CHUNK * sizeof(uint8_t));
+		Range3d *ranges = memory->ranges;
+		uint8_t *visited = memory->visited;
+
 		if (ranges && visited)
 		{
 			for (int i = 0; i < (BLOCKS_IN_CHUNK); i++) visited[i] = 0;

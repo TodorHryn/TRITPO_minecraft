@@ -42,6 +42,7 @@
     <None Include="sun.vert" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="MainHeader.h" />
     <ClInclude Include="ShaderProgram.h" />
     <ClInclude Include="ShadowMap.h" />
     <ClInclude Include="Skybox.h" />
