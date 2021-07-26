@@ -13,7 +13,6 @@
 #include "glm\gtc\matrix_transform.hpp"
 #include "glm\gtc\type_ptr.hpp"
 #include "main.h"
-#include "PoolAllocator.hpp"
 
 void *memory_arena_alloc(Memory_arena *arena, int64_t size)
 {
@@ -57,9 +56,9 @@ Chunk* world_pop_chunk_for_rebuild(World *w)
     return c;
 }
 
-Chunk *world_add_chunk(World *world, Memory_arena *arena, int x, int y, int z)
+Chunk *world_add_chunk(World *world, PoolAllocator<Chunk> *allocator, int x, int y, int z)
 {
-    Chunk *result = (Chunk *)memory_arena_alloc(arena, sizeof(Chunk));
+    Chunk *result = allocator->malloc();
 
     if (result)
     {
@@ -432,7 +431,7 @@ int get_height(int x, int z) {
 }
 
 void generate_chunk(Game_state *state, int chunk_x, int chunk_y, int chunk_z) {
-	Chunk *c = world_add_chunk(&state->world, &state->arena, chunk_x, chunk_y, chunk_z);
+	Chunk *c = world_add_chunk(&state->world, state->chunkAllocator, chunk_x, chunk_y, chunk_z);
     assert(c);
 
     int i = 0;
@@ -462,8 +461,7 @@ void game_state_and_memory_init(Game_memory *memory)
 {
     assert(!memory->is_initialized);
 
-    assert(sizeof(Game_state) <= memory->permanent_mem_size);
-    Game_state *state = (Game_state *)memory->permanent_mem;
+    Game_state *state =	memory->game_state;
 
     memory->is_initialized = 1;
 
@@ -521,9 +519,8 @@ void game_state_and_memory_init(Game_memory *memory)
         -1.0f,  1.0f,  0.0f
 	};
 
-    state->arena.curr = (uint8_t *)ALIGN_PTR_UP(&state[1], 8);
-    state->arena.end = (uint8_t *)memory->permanent_mem + memory->permanent_mem_size;
-
+	state->chunkAllocator = memory->chunkAllocator;
+	
     state->world.next = 0;
 	new (&state->world.rebuild_stack) std::stack<Chunk*>();
 
@@ -929,7 +926,7 @@ bool chunk_exists(Game_state *state, int x, int y, int z) {
 void game_update_and_render(Game_input *input, Game_memory *memory)
 {
     assert(memory->is_initialized);
-    Game_state *state = (Game_state *)memory->permanent_mem;
+    Game_state *state = memory->game_state;
 
     /* logic update */
     {
@@ -1051,7 +1048,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 
                 if (!prev_chunk)
                 {
-                    prev_chunk = world_add_chunk(&state->world, &state->arena, last_chunk_x, last_chunk_y, last_chunk_z);
+                    prev_chunk = world_add_chunk(&state->world, state->chunkAllocator, last_chunk_x, last_chunk_y, last_chunk_z);
                 }
 
                 if (prev_chunk)
@@ -1375,14 +1372,15 @@ int main(void)
 
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-    static uint8_t permanent_mem_blob[PERMANENT_MEM_SIZE];
+	static uint8_t game_state_mem_blob[sizeof(Game_state)];
     static uint8_t transient_mem_blob[TRANSIENT_MEM_SIZE];
-
+	static Chunk chunk_mem_blob[MAX_CHUNKS];
+	
     Game_memory game_memory = {};
-    game_memory.permanent_mem_size = PERMANENT_MEM_SIZE;
-    game_memory.permanent_mem = permanent_mem_blob;
     game_memory.transient_mem_size = TRANSIENT_MEM_SIZE;
     game_memory.transient_mem = transient_mem_blob;
+	game_memory.game_state = (Game_state*) game_state_mem_blob;
+	game_memory.chunkAllocator = new PoolAllocator<Chunk>(chunk_mem_blob, MAX_CHUNKS);
 
     game_state_and_memory_init(&game_memory);
 
@@ -1406,7 +1404,7 @@ int main(void)
         game_input->aspect_ratio = float(window_width) / float(window_height);
         game_input->dt = float(curr_time - prev_time);
 
-		Game_state *state = (Game_state *) game_memory.permanent_mem;
+		Game_state *state = game_memory.game_state;
 		if (state->frameCount % 10 == 0) {
 			state->fps = 1 / ((glfwGetTime() - state->fpsCounterPrevTime) / 10);
 			state->fpsCounterPrevTime = glfwGetTime();

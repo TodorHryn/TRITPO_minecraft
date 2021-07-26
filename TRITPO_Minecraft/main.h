@@ -5,6 +5,7 @@
 #include "ShaderProgram.h"
 #include "Skybox.h"
 #include "ShadowMap.h"
+#include "PoolAllocator.hpp"
 
 #define MEMORY_KB(x) ((x) * 1024ull)
 #define MEMORY_MB(x) MEMORY_KB((x) * 1024ull)
@@ -13,7 +14,7 @@
 #define ALIGN_UP(n, k) (((n) + (k) - 1) & ((~(k)) + 1))
 #define ALIGN_PTR_UP(n, k) ALIGN_UP((uint64_t)(n), (k))
 
-#define PERMANENT_MEM_SIZE MEMORY_MB(16)
+#define MAX_CHUNKS 2048
 #define TRANSIENT_MEM_SIZE MEMORY_GB(1)
 #define CHUNK_DIM_LOG2 4
 #define WORLD_RADIUS 3
@@ -78,26 +79,6 @@ struct Game_input
     };
 };
 
-struct Game_memory
-{
-    int is_initialized;
-
-    uint64_t permanent_mem_size;
-    void *permanent_mem;
-
-    uint64_t transient_mem_size;
-    void *transient_mem;
-
-	Range3d ranges[BLOCKS_IN_CHUNK];
-	uint8_t visited[BLOCKS_IN_CHUNK];
-};
-
-struct Memory_arena
-{
-    uint8_t *curr;
-    uint8_t *end;
-};
-
 enum Block_type
 {
     BLOCK_GRASS,
@@ -136,6 +117,12 @@ struct Chunk
     Mesh meshes[BLOCK_TYPE_COUNT];
 };
 
+struct Memory_arena
+{
+    uint8_t *curr;
+    uint8_t *end;
+};
+
 struct World
 {
     Chunk *next;
@@ -145,7 +132,7 @@ struct World
 
 struct Game_state
 {
-    Memory_arena arena;
+	PoolAllocator<Chunk> *chunkAllocator;
 
 	Skybox skybox;
     ShaderProgram skyboxSP;
@@ -181,6 +168,20 @@ struct Game_state
 	float fps;
 
     World world;
+};
+
+struct Game_memory
+{
+    int is_initialized;
+
+    uint64_t transient_mem_size;
+    void *transient_mem;
+
+	Game_state *game_state;
+
+	Range3d ranges[BLOCKS_IN_CHUNK];
+	uint8_t visited[BLOCKS_IN_CHUNK];
+	PoolAllocator<Chunk> *chunkAllocator;
 };
 
 struct Raycast_result
