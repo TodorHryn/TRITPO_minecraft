@@ -15,11 +15,11 @@
 #define ALIGN_UP(n, k) (((n) + (k) - 1) & ((~(k)) + 1))
 #define ALIGN_PTR_UP(n, k) ALIGN_UP((uint64_t)(n), (k))
 
-#define MAX_CHUNKS 700
+#define MAX_CHUNKS 2048
 #define TRANSIENT_MEM_SIZE MEMORY_GB(1)
 
 #define CHUNK_DIM_LOG2 4
-#define WORLD_RADIUS 3
+#define WORLD_RADIUS 6
 #define GENERATION_Y_RADIUS 4
 #define WORLD_SEED 0x7b447dc7
 

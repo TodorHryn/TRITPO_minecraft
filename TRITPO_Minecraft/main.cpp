@@ -510,16 +510,6 @@ void game_state_and_memory_init(Game_memory *memory)
 	new (&state->world.rebuild_stack) std::stack<Chunk*>();
 	new (&state->world.chunks) std::vector<Chunk*>();
 
-    for (int chunk_y = 7; chunk_y >= 0; chunk_y--) {
-        for (int chunk_z = -WORLD_RADIUS; chunk_z <= WORLD_RADIUS; chunk_z++)
-        {
-            for (int chunk_x = -WORLD_RADIUS; chunk_x <= WORLD_RADIUS; chunk_x++)
-            {
-                generate_chunk(state, chunk_x, chunk_y, chunk_z);
-            }
-        }
-    }
-
     state->cam_pos = Vec3f(0, 120, 0);
     state->cam_up = Vec3f(0, 1, 0);
 
