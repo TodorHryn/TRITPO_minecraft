@@ -1116,8 +1116,8 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		glEnable(GL_DEPTH_TEST);
         glClearColor(0.75f, 0.96f, 0.9f, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
-		glm::vec3 sunPosition(20 * sin(-20 + glfwGetTime() * 0.1), 20 * cos(0.002 - 20 + glfwGetTime() * 0.1), 20 * sin(glfwGetTime() * 0.1));
+		
+		glm::vec3 sunPosition(20 * sin(-20 + glfwGetTime() * TIME_SPEED), 20 * cos(0.002 - 20 + glfwGetTime() * TIME_SPEED), 20 * sin(glfwGetTime() * TIME_SPEED));
 		float sunHeight = glm::dot(glm::normalize(sunPosition), glm::vec3(0.0f, 1.0f, 0.0f));
 		float ambient = std::max(sunHeight / 2, 0.3f);
 
