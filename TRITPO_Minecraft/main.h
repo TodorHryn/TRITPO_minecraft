@@ -1,5 +1,6 @@
 #pragma once
 
+#include <vector>
 #include "3DMath.h"
 #include "Texture.h"
 #include "ShaderProgram.h"
@@ -112,7 +113,6 @@ struct Chunk
     int x;
     int y;
     int z;
-    Chunk *next;
     int nblocks;
     uint8_t blocks[CHUNK_DIM * CHUNK_DIM * CHUNK_DIM];
     Mesh meshes[BLOCK_TYPE_COUNT];
@@ -120,8 +120,7 @@ struct Chunk
 
 struct World
 {
-    Chunk *next;
-
+    std::vector<Chunk*> chunks;
 	std::stack<Chunk*> rebuild_stack;
 };
 

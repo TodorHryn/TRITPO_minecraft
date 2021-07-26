@@ -37,7 +37,6 @@ Chunk *world_add_chunk(World *world, PoolAllocator<Chunk> *allocator, int x, int
         result->x = x;
         result->y = y;
         result->z = z;
-        result->next = world->next;
         result->nblocks = 0;
 		
         for (int i = 0; i < BLOCKS_IN_CHUNK; i++)
@@ -52,7 +51,7 @@ Chunk *world_add_chunk(World *world, PoolAllocator<Chunk> *allocator, int x, int
             result->meshes[i].vbo = 0;
         }
 
-        world->next = result;
+		world->chunks.push_back(result);
     }
 
     return (result);
@@ -141,8 +140,8 @@ Raycast_result raycast(World *world, Vec3f pos, Vec3f view_dir)
         int chunk_x = i >> CHUNK_DIM_LOG2;
         int chunk_y = j >> CHUNK_DIM_LOG2;
         int chunk_z = k >> CHUNK_DIM_LOG2;
-        Chunk *c = world->next;
-        while (c != 0)
+        
+        for (Chunk *c : world->chunks)
         {
             if ((chunk_x == c->x) && (chunk_y == c->y) && (chunk_z == c->z))
             {
@@ -158,8 +157,6 @@ Raycast_result raycast(World *world, Vec3f pos, Vec3f view_dir)
                     goto end_loop;
                 }
             }
-
-            c = c->next;
         }
 
         if (i == i_end && j == j_end && k == k_end)
@@ -493,7 +490,6 @@ void game_state_and_memory_init(Game_memory *memory)
 
 	state->chunkAllocator = memory->chunkAllocator;
 	
-    state->world.next = 0;
 	new (&state->world.rebuild_stack) std::stack<Chunk*>();
 
     for (int chunk_y = 7; chunk_y >= 0; chunk_y--) {
@@ -569,8 +565,7 @@ void game_state_and_memory_init(Game_memory *memory)
 }
 
 void renderWorld(Game_state *state, ShaderProgram &sp) {
-	Chunk *c = state->world.next;
-	while (c != 0)
+	for (Chunk *c : state->world.chunks)
 	{
 		if (c->nblocks)
 		{
@@ -596,7 +591,6 @@ void renderWorld(Game_state *state, ShaderProgram &sp) {
 				}
 			}
 		}
-		c = c->next;
 	}
 }
 
@@ -876,13 +870,9 @@ void rebuild_chunk(Game_memory *memory, Chunk *chunk) {
 }
 
 bool chunk_exists(Game_state *state, int x, int y, int z) {
-	Chunk *c = state->world.next;
-
-	while (c != 0) {
+	for (Chunk *c : state->world.chunks) {
 		if (c->x == x && c->y == y && c->z == z) 
 			return true;
-
-		c = c->next;
 	}
 
 	return false;
@@ -997,8 +987,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 
                 Chunk *prev_chunk = 0;
 
-                Chunk *c = state->world.next;
-                while (c != 0)
+                for (Chunk *c : state->world.chunks)
                 {
                     if ((c->x == last_chunk_x) &&
                         (c->y == last_chunk_y) &&
@@ -1007,8 +996,6 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                         prev_chunk = c;
                         break;
                     }
-
-                    c = c->next;
                 }
 
                 if (!prev_chunk)
