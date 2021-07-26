@@ -16,6 +16,7 @@
 
 #define MAX_CHUNKS 2048
 #define TRANSIENT_MEM_SIZE MEMORY_GB(1)
+
 #define CHUNK_DIM_LOG2 4
 #define WORLD_RADIUS 3
 #define GENERATION_Y_RADIUS 4
@@ -115,12 +116,6 @@ struct Chunk
     int nblocks;
     uint8_t blocks[CHUNK_DIM * CHUNK_DIM * CHUNK_DIM];
     Mesh meshes[BLOCK_TYPE_COUNT];
-};
-
-struct Memory_arena
-{
-    uint8_t *curr;
-    uint8_t *end;
 };
 
 struct World

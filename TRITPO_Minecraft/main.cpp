@@ -14,34 +14,6 @@
 #include "glm\gtc\type_ptr.hpp"
 #include "main.h"
 
-void *memory_arena_alloc(Memory_arena *arena, int64_t size)
-{
-    assert(size > 0);
-    assert((uint64_t)arena->curr % 8 == 0);
-
-
-    if (arena->end < (arena->curr + size))
-    {
-        return (0);
-    }
-
-    uint8_t *result = arena->curr;
-    arena->curr = (uint8_t *)ALIGN_PTR_UP(result + size, 8);
-
-    return (result);
-}
-
-inline void *memory_arena_get_cursor(Memory_arena *arena)
-{
-    return (arena->curr);
-}
-
-inline void memory_arena_set_cursor(Memory_arena *arena, void *cursor)
-{
-    assert(cursor <= (void *)arena->end);
-    arena->curr = (uint8_t *)cursor;
-}
-
 void world_push_chunk_for_rebuild(World *w, Chunk *c)
 {
 	w->rebuild_stack.push(c);
@@ -656,10 +628,6 @@ void drawText(Game_state *state, Game_input *input, std::string text, float x, f
 
 void rebuild_chunk(Game_memory *memory, Chunk *chunk) {
 	if (chunk->nblocks) {
-		Memory_arena arena = {};
-		arena.curr = (uint8_t *) memory->transient_mem;
-		arena.end  = (uint8_t *) memory->transient_mem + memory->transient_mem_size;
-        
 		Range3d *ranges = memory->ranges;
 		uint8_t *visited = memory->visited;
 
@@ -689,11 +657,8 @@ void rebuild_chunk(Game_memory *memory, Chunk *chunk) {
 			int ranges_left = nranges;
 			int ranges_idx_start = 0;
 			int ranges_idx_end  = 0;
-			void *arena_cursor = memory_arena_get_cursor(&arena);
 			while (ranges_left > 0)
 			{
-				memory_arena_set_cursor(&arena, arena_cursor);
-
 				int ranges_count = 0;
 				uint8_t range_type = ranges[ranges_idx_start].type;
 				while ((ranges_idx_end < nranges) && ranges[ranges_idx_end].type == range_type)
@@ -708,7 +673,7 @@ void rebuild_chunk(Game_memory *memory, Chunk *chunk) {
 
 				int vs_arr_size = 3 * 12 * ranges_count * sizeof(Vec3f);
 				int ns_arr_size = 3 * 12 * ranges_count * sizeof(Vec3f);
-				Vec3f *vs = (Vec3f *)memory_arena_alloc(&arena, vs_arr_size + ns_arr_size);
+				Vec3f *vs = (Vec3f*) memory->transient_mem;
 				printf("%p\n", vs);
 				Vec3f *ns = vs + (3 * 12 * ranges_count);
 				if (vs)
