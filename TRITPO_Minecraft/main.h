@@ -114,13 +114,15 @@ struct Chunk
     int y;
     int z;
     int nblocks;
+	bool changed;
     uint8_t blocks[CHUNK_DIM * CHUNK_DIM * CHUNK_DIM];
     Mesh meshes[BLOCK_TYPE_COUNT];
 };
 
 struct World
 {
-    std::vector<Chunk*> chunks;
+    std::vector<Chunk*> visible_chunks;
+	std::vector<Chunk*> unloaded_chunks;
 	std::stack<Chunk*> rebuild_stack;
 };
 
@@ -193,3 +195,5 @@ struct Raycast_result
     int last_k;
 };
 
+void world_push_chunk_for_rebuild(World *w, Chunk *c);
+void generate_chunk(Game_state *state, int chunk_x, int chunk_y, int chunk_z);

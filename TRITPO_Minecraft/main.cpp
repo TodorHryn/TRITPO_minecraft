@@ -14,7 +14,7 @@
 #include "glm\gtc\type_ptr.hpp"
 #include "main.h"
 
-void free_chunk(Chunk *chunk) {
+void free_chunk_mesh(Chunk *chunk) {
 	for (int i = 0; i < BLOCK_TYPE_COUNT; ++i) {
 		Mesh *m = &chunk->meshes[i];
 		if (m->vao != 0)
@@ -29,6 +29,40 @@ void free_chunk(Chunk *chunk) {
 			m->vbo = 0;
 		}
 	}
+}
+
+void unload_chunk(Game_state *state, int chunk_id) {
+	World &world = state->world;
+	Chunk *c = world.visible_chunks[chunk_id];
+
+	if (!c->changed) {
+		free_chunk_mesh(c);
+		world.visible_chunks.erase(world.visible_chunks.begin() + chunk_id);
+		state->chunkAllocator->free(c);
+	}
+	else {
+		free_chunk_mesh(c);
+		world.visible_chunks.erase(world.visible_chunks.begin() + chunk_id);
+		world.unloaded_chunks.push_back(c);
+	}
+}
+
+void load_chunk(Game_state *state, int chunk_x, int chunk_y, int chunk_z) {
+	World &world = state->world;
+	auto &uchunks = world.unloaded_chunks;
+
+	for (int i = uchunks.size() - 1; i >= 0; --i) {
+		Chunk *c = uchunks[i];
+
+		if (c->x == chunk_x && c->y == chunk_y && c->z == chunk_z) {
+			uchunks.erase(uchunks.begin() + i);
+			world.visible_chunks.push_back(c);
+			world_push_chunk_for_rebuild(&state->world, c);
+			return;
+		}
+	}
+
+	generate_chunk(state, chunk_x, chunk_y, chunk_z);
 }
 
 void world_push_chunk_for_rebuild(World *w, Chunk *c)
@@ -54,6 +88,7 @@ Chunk *world_add_chunk(World *world, PoolAllocator<Chunk> *allocator, int x, int
         result->x = x;
         result->y = y;
         result->z = z;
+		result->changed = false;
         result->nblocks = 0;
 		
         for (int i = 0; i < BLOCKS_IN_CHUNK; i++)
@@ -68,7 +103,7 @@ Chunk *world_add_chunk(World *world, PoolAllocator<Chunk> *allocator, int x, int
             result->meshes[i].vbo = 0;
         }
 
-		world->chunks.push_back(result);
+		world->visible_chunks.push_back(result);
     }
 
     return (result);
@@ -158,7 +193,7 @@ Raycast_result raycast(World *world, Vec3f pos, Vec3f view_dir)
         int chunk_y = j >> CHUNK_DIM_LOG2;
         int chunk_z = k >> CHUNK_DIM_LOG2;
         
-        for (Chunk *c : world->chunks)
+        for (Chunk *c : world->visible_chunks)
         {
             if ((chunk_x == c->x) && (chunk_y == c->y) && (chunk_z == c->z))
             {
@@ -508,7 +543,8 @@ void game_state_and_memory_init(Game_memory *memory)
 	state->chunkAllocator = memory->chunkAllocator;
 	
 	new (&state->world.rebuild_stack) std::stack<Chunk*>();
-	new (&state->world.chunks) std::vector<Chunk*>();
+	new (&state->world.visible_chunks) std::vector<Chunk*>();
+	new (&state->world.unloaded_chunks) std::vector<Chunk*>();
 
     state->cam_pos = Vec3f(0, 120, 0);
     state->cam_up = Vec3f(0, 1, 0);
@@ -573,7 +609,7 @@ void game_state_and_memory_init(Game_memory *memory)
 }
 
 void renderWorld(Game_state *state, ShaderProgram &sp) {
-	for (Chunk *c : state->world.chunks)
+	for (Chunk *c : state->world.visible_chunks)
 	{
 		if (c->nblocks)
 		{
@@ -878,7 +914,7 @@ void rebuild_chunk(Game_memory *memory, Chunk *chunk) {
 }
 
 bool chunk_exists(Game_state *state, int x, int y, int z) {
-	for (Chunk *c : state->world.chunks) {
+	for (Chunk *c : state->world.visible_chunks) {
 		if (c->x == x && c->y == y && c->z == z) 
 			return true;
 	}
@@ -976,6 +1012,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                 int block_idx = CHUNK_DIM * CHUNK_DIM * block_y + CHUNK_DIM * block_z + block_x;
                 if (rc.chunk->blocks[block_idx] != BLOCK_AIR)
                 {
+					rc.chunk->changed = true;
                     rc.chunk->blocks[block_idx] = BLOCK_AIR;
                     rc.chunk->nblocks--;
                     world_push_chunk_for_rebuild(&state->world, rc.chunk);
@@ -995,7 +1032,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 
                 Chunk *prev_chunk = 0;
 
-                for (Chunk *c : state->world.chunks)
+                for (Chunk *c : state->world.visible_chunks)
                 {
                     if ((c->x == last_chunk_x) &&
                         (c->y == last_chunk_y) &&
@@ -1022,6 +1059,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
                     if (prev_chunk->blocks[block_idx] == BLOCK_AIR)
                     {
                         // TODO(max): assing block type number
+						prev_chunk->changed = true;
                         prev_chunk->blocks[block_idx] = state->block_to_place;
                         prev_chunk->nblocks++;
                         world_push_chunk_for_rebuild(&state->world, prev_chunk);
@@ -1039,14 +1077,14 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 			for (int z = cam_chunk_z - WORLD_RADIUS; z <= cam_chunk_z + WORLD_RADIUS; ++z) {
 				for (int i = cam_chunk_y - GENERATION_Y_RADIUS; i <= cam_chunk_y + GENERATION_Y_RADIUS; ++i) {
 					if (!chunk_exists(state, x, i, z)) {
-						generate_chunk(state, x, i, z);
+						load_chunk(state, x, i, z);
 					}
 				}
 			}
 		}
 
 		//Remove far chunks
-		auto &chunks = state->world.chunks;
+		auto &chunks = state->world.visible_chunks;
 		for (int i = chunks.size() - 1; i >= 0; --i) {
 			Chunk *c = chunks[i];
 
@@ -1055,9 +1093,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 			int dz = abs(cam_chunk_z - c->z);
 
 			if (dx > WORLD_RADIUS || dz > WORLD_RADIUS || dy > GENERATION_Y_RADIUS) {
-				free_chunk(c);
-				chunks.erase(chunks.begin() + i);
-				state->chunkAllocator->free(c);
+				unload_chunk(state, i);
 			}
 		}
 
@@ -1312,14 +1348,6 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 
 int main(void)
 {
-	//for (float x = 10; x < 14; x += 0.1) {
-	//	for (float z = 10; z < 14; z += 0.1) {
-	//		std::cout << (int) abs(perlin_noise(x, z) * 5) + 3;
-	//	}
-	//	std::cout << std::endl;
-	//}
-	//system("pause");
-
     if (glfwInit() == GLFW_FALSE)
     {
         return (-1);
