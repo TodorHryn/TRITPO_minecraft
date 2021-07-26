@@ -14,6 +14,23 @@
 #include "glm\gtc\type_ptr.hpp"
 #include "main.h"
 
+void free_chunk(Chunk *chunk) {
+	for (int i = 0; i < BLOCK_TYPE_COUNT; ++i) {
+		Mesh *m = &chunk->meshes[i];
+		if (m->vao != 0)
+		{
+			assert(m->vao && m->vbo);
+
+			glDeleteVertexArrays(1, &m->vao);
+			glDeleteBuffers(1, &m->vbo);
+
+			m->num_of_vs = 0;
+			m->vao = 0;
+			m->vbo = 0;
+		}
+	}
+}
+
 void world_push_chunk_for_rebuild(World *w, Chunk *c)
 {
 	w->rebuild_stack.push(c);
@@ -491,6 +508,7 @@ void game_state_and_memory_init(Game_memory *memory)
 	state->chunkAllocator = memory->chunkAllocator;
 	
 	new (&state->world.rebuild_stack) std::stack<Chunk*>();
+	new (&state->world.chunks) std::vector<Chunk*>();
 
     for (int chunk_y = 7; chunk_y >= 0; chunk_y--) {
         for (int chunk_z = -WORLD_RADIUS; chunk_z <= WORLD_RADIUS; chunk_z++)
@@ -1034,6 +1052,22 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 						generate_chunk(state, x, i, z);
 					}
 				}
+			}
+		}
+
+		//Remove far chunks
+		auto &chunks = state->world.chunks;
+		for (int i = chunks.size() - 1; i >= 0; --i) {
+			Chunk *c = chunks[i];
+
+			int dx = abs(cam_chunk_x - c->x);
+			int dy = abs(cam_chunk_y - c->y);
+			int dz = abs(cam_chunk_z - c->z);
+
+			if (dx > WORLD_RADIUS || dz > WORLD_RADIUS || dy > GENERATION_Y_RADIUS) {
+				free_chunk(c);
+				chunks.erase(chunks.begin() + i);
+				state->chunkAllocator->free(c);
 			}
 		}
 

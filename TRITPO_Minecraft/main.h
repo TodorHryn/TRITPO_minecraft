@@ -15,7 +15,7 @@
 #define ALIGN_UP(n, k) (((n) + (k) - 1) & ((~(k)) + 1))
 #define ALIGN_PTR_UP(n, k) ALIGN_UP((uint64_t)(n), (k))
 
-#define MAX_CHUNKS 2048
+#define MAX_CHUNKS 700
 #define TRANSIENT_MEM_SIZE MEMORY_GB(1)
 
 #define CHUNK_DIM_LOG2 4
