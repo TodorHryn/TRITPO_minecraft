@@ -20,12 +20,17 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="3DMath.cpp" />
+    <ClCompile Include="Blocks.cpp" />
+    <ClCompile Include="World.cpp" />
     <ClInclude Include="3DMath.h" />
+    <ClCompile Include="Chunk.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ShaderProgram.cpp" />
     <ClCompile Include="ShadowMap.cpp" />
     <ClCompile Include="Skybox.cpp" />
     <ClCompile Include="Texture.cpp" />
+    <ClInclude Include="World.h" />
+    <ClInclude Include="WorldGeneration.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="image.frag" />
@@ -42,7 +47,10 @@
     <None Include="sun.vert" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Blocks.h" />
+    <ClInclude Include="Chunk.h" />
     <ClInclude Include="main.h" />
+    <ClInclude Include="Mesh.h" />
     <ClInclude Include="PoolAllocator.hpp" />
     <ClInclude Include="ShaderProgram.h" />
     <ClInclude Include="ShadowMap.h" />

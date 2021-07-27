@@ -7,6 +7,8 @@
 #include "Skybox.h"
 #include "ShadowMap.h"
 #include "PoolAllocator.hpp"
+#include "Chunk.h"
+#include "World.h"
 
 #define MEMORY_KB(x) ((x) * 1024ull)
 #define MEMORY_MB(x) MEMORY_KB((x) * 1024ull)
@@ -19,13 +21,9 @@
 #define TRANSIENT_MEM_SIZE MEMORY_GB(1)
 
 #define TIME_SPEED 0.001
-#define CHUNK_DIM_LOG2 4
 #define WORLD_RADIUS 6
 #define GENERATION_Y_RADIUS 4
 #define WORLD_SEED 0x7b447dc7
-
-#define CHUNK_DIM (1 << CHUNK_DIM_LOG2)
-#define BLOCKS_IN_CHUNK ((CHUNK_DIM) * (CHUNK_DIM) * (CHUNK_DIM))
 
 struct Range3d
 {
@@ -80,51 +78,6 @@ struct Game_input
 
         Button buttons[13];
     };
-};
-
-enum Block_type
-{
-    BLOCK_GRASS,
-    BLOCK_DIRT,
-    BLOCK_STONE,
-    BLOCK_SNOW,
-    BLOCK_AIR,
-   
-    BLOCK_TYPE_COUNT = BLOCK_AIR,
-};
-static_assert(BLOCK_TYPE_COUNT < 255, "Block_type has more than 255 block types, this won't fit in uint8_t");
-
-Vec3f Block_colors[BLOCK_TYPE_COUNT] =
-{
-	Vec3f(0, 1, 0),
-	Vec3f(130 / 255.0f, 108 / 255.0f, 47 / 255.0f),
-	Vec3f(0.4f, 0.4f, 0.4f),
-	Vec3f(1, 1, 1)
-};
-
-struct Mesh
-{
-    int num_of_vs;
-    GLuint vao;
-    GLuint vbo;
-};
-
-struct Chunk
-{
-    int x;
-    int y;
-    int z;
-    int nblocks;
-	bool changed;
-    uint8_t blocks[CHUNK_DIM * CHUNK_DIM * CHUNK_DIM];
-    Mesh meshes[BLOCK_TYPE_COUNT];
-};
-
-struct World
-{
-    std::vector<Chunk*> visible_chunks;
-	std::vector<Chunk*> unloaded_chunks;
-	std::stack<Chunk*> rebuild_stack;
 };
 
 struct Game_state
@@ -196,5 +149,3 @@ struct Raycast_result
     int last_k;
 };
 
-void world_push_chunk_for_rebuild(World *w, Chunk *c);
-void generate_chunk(Game_state *state, int chunk_x, int chunk_y, int chunk_z);

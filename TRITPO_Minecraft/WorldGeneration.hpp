@@ -1,4 +1,7 @@
-#include "Worldgen.h"
+#pragma once
+#include "3DMath.h"
+#include "main.h"
+#include <algorithm>
 
 unsigned int hash(unsigned int x) { //https://stackoverflow.com/a/12996028
     x = ((x >> 16) ^ x) * 0x45d9f3b;
@@ -54,4 +57,32 @@ int get_height(int x, int z) {
 	float noise3 = (perlin_noise(x / 16.0f, z / 16.0f) + 1) / 2;
 
 	return CHUNK_DIM * (6 * noise0 + 3 * noise1 + 1.5 * noise2 + 0.75 * noise3);
+}
+
+void generate_chunk(World &world, int chunk_x, int chunk_y, int chunk_z) {
+	Chunk *c = world.add_chunk(chunk_x, chunk_y, chunk_z);
+    assert(c);
+
+    int i = 0;
+    for (int z = 0; z < CHUNK_DIM; z++)
+    {
+        for (int x = 0; x < CHUNK_DIM; x++)
+        {
+			int noise_x = (chunk_x * CHUNK_DIM + x);
+			int noise_z = (chunk_z * CHUNK_DIM + z);					
+			int h = get_height(noise_x, noise_z) - CHUNK_DIM * chunk_y;
+
+			for (int y = 0; y < std::min(h, CHUNK_DIM); y++)
+			{
+				uint8_t block_type;
+
+				block_type = BLOCK_STONE;
+				c->blocks[CHUNK_DIM * CHUNK_DIM * y + CHUNK_DIM * z + x] = block_type;
+				c->nblocks++;
+				i++;
+			}
+        }
+    }
+    
+	world.push_chunk_for_rebuild(c);
 }
