@@ -17,6 +17,7 @@ class Chunk {
 	    int z;
 	    int nblocks;
 		bool changed;
+		bool render;
 		uint8_t blocks[CHUNK_DIM * CHUNK_DIM * CHUNK_DIM];
 		Mesh meshes[BLOCK_TYPE_COUNT];
 };

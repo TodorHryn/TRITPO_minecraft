@@ -12,6 +12,7 @@ Chunk* World::add_chunk(int x, int y, int z) {
         result->y = y;
         result->z = z;
 		result->changed = false;
+		result->render = true;
         result->nblocks = 0;
 		
         for (int i = 0; i < BLOCKS_IN_CHUNK; i++)

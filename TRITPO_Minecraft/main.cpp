@@ -434,7 +434,7 @@ void game_state_and_memory_init(Game_memory *memory)
 void renderWorld(Game_state *state, ShaderProgram &sp) {
 	for (Chunk *c : state->world.visible_chunks)
 	{
-		if (c->nblocks)
+		if (c->nblocks && c->render)
 		{
 			Vec3f chunk_offset(
 				(float)(c->x * CHUNK_DIM),
@@ -745,6 +745,23 @@ bool chunk_exists(Game_state *state, int x, int y, int z) {
 	return false;
 }
 
+void frustum_culling_perspective(Game_state *state, glm::vec3 cameraPos, glm::vec3 cameraViewDir, float nearZ, float farZ) {
+	for (Chunk *c : state->world.visible_chunks) {
+		glm::vec3 chunkCenter(c->x * CHUNK_DIM + CHUNK_DIM / 2, c->y * CHUNK_DIM + CHUNK_DIM / 2, c->z * CHUNK_DIM + CHUNK_DIM / 2);
+		float radius = sqrt(3) * CHUNK_DIM / 2;
+
+		glm::vec3 chunkDir = chunkCenter - cameraPos;
+		float chunkDirProj = glm::dot(cameraViewDir, chunkDir);
+
+		if (chunkDirProj + radius < nearZ || chunkDirProj - radius > farZ) {
+			c->render = false;
+			continue;
+		}
+		
+		c->render = true;
+	}
+}
+
 void game_update_and_render(Game_input *input, Game_memory *memory)
 {
     assert(memory->is_initialized);
@@ -943,7 +960,7 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		glm::vec3 sunPosition(20 * sin(-20 + glfwGetTime() * TIME_SPEED), 20 * cos(0.002 - 20 + glfwGetTime() * TIME_SPEED), 20 * sin(glfwGetTime() * TIME_SPEED));
 		float sunHeight = glm::dot(glm::normalize(sunPosition), glm::vec3(0.0f, 1.0f, 0.0f));
 		float ambient = std::max(sunHeight / 2, 0.3f);
-
+		
 		//Shadow maps
 		glm::vec3 cameraPos(state->cam_pos.x, state->cam_pos.y, state->cam_pos.z);
 		glm::mat4 lightView = glm::lookAt(sunPosition + cameraPos, cameraPos, glm::vec3(0.0f, 1.0f, 0.0f));
@@ -955,7 +972,6 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		glm::mat4 lightProjectionViewMatrix2 = lightProjection2 * lightView;
 		glm::mat4 lightProjectionViewMatrix3 = lightProjection3 * lightView;
 		glm::mat4 lightProjectionViewMatrix4 = lightProjection4 * lightView;
-
 		state->meshShadowMapSP.use();
 
 		state->shadowMap1.bind();
@@ -983,6 +999,9 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 
 		Mat4x4f projection = mat4x4f_perspective(90.0f, input->aspect_ratio, 0.1f, 200.0f);
         state->mesh_sp.setMatrix4fv("u_projection", &projection.m[0][0]);
+
+		glm::vec3 camViewDir(state->cam_view_dir.x, state->cam_view_dir.y, state->cam_view_dir.z);
+		frustum_culling_perspective(state, cameraPos, camViewDir, 0.1f, 200.0f);
 		
 		Mat4x4f view = mat4x4f_lookat(state->cam_pos, state->cam_pos + state->cam_view_dir, state->cam_up);
 		state->mesh_sp.setMatrix4fv("u_view", &view.m[0][0]);
@@ -1023,7 +1042,6 @@ void game_update_and_render(Game_input *input, Game_memory *memory)
 		}
 
 		renderWorld(state, state->mesh_sp);
-
 
 		Raycast_result rc = raycast(&state->world, state->cam_pos, state->cam_view_dir);
 		if (rc.collision) {
